@@ -9,7 +9,7 @@ load_dotenv()
 class LLMClient:
 
     def __init__(self):
-        api_key = ""
+        api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not configured")
