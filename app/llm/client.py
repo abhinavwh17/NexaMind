@@ -12,11 +12,16 @@ class LLMClient:
         api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
-            raise ValueError("GEMINI_API_KEY is not configured")
+            raise ValueError(
+                "GEMINI_API_KEY is not configured"
+            )
 
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key
+        )
 
     def generate(self, prompt: str) -> str:
+
         interaction = self.client.interactions.create(
             model="gemini-3.6-flash",
             input=prompt,

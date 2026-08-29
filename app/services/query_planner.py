@@ -8,25 +8,53 @@ class QueryPlanner:
     def __init__(self):
         self.llm = LLMClient()
 
-    def create_plan(self, question: str, columns: list[str]):
+    def create_plan(
+        self,
+        question: str,
+        schema: dict
+    ):
 
         prompt = f"""
-You are a financial data analysis query planner.
+You are the query planning engine for NexaMind,
+a privacy-focused financial analysis application.
 
-Your job is to understand the user's question and convert it into
-a structured analysis operation.
+Your job is to convert the user's natural-language question
+into a structured calculation plan that the Python backend
+can execute locally.
 
-You are NOT calculating any values.
-You are only determining what calculation the Python application
-needs to perform.
+You are NOT a calculator.
 
-Available Excel columns:
-{json.dumps(columns)}
+You NEVER receive actual spreadsheet row data.
 
-User question:
+You only receive:
+
+- sheet names
+- column names
+- column types
+
+The actual spreadsheet data remains private inside Python.
+
+Never calculate the final answer yourself.
+Never invent spreadsheet values.
+
+
+=========================================================
+AVAILABLE WORKBOOK SCHEMA
+=========================================================
+
+{json.dumps(schema, indent=2)}
+
+
+=========================================================
+USER QUESTION
+=========================================================
+
 {question}
 
-Supported operations:
+
+=========================================================
+SUPPORTED OPERATIONS
+=========================================================
 
 SUM
 AVERAGE
@@ -34,258 +62,597 @@ MIN
 MAX
 COUNT
 GROUP_BY
+GROUP_BY_METRICS
 
 
-SEMANTIC RULES
+=========================================================
+SUPPORTED FILTER OPERATORS
+=========================================================
 
-SUM:
-Use SUM when the user asks for:
+=
+!=
+>
+>=
+<
+<=
+LAST_MONTH
+THIS_MONTH
+
+
+=========================================================
+STANDARD RESPONSE FORMAT
+=========================================================
+
+Always return:
+
+{{
+    "calculations": [...],
+    "answer_template": "..."
+}}
+
+
+=========================================================
+SCALAR PLACEHOLDERS
+=========================================================
+
+For SUM, AVERAGE, MIN, MAX and COUNT:
+
+{{{{calc_1.value}}}}
+
+
+For GROUP_BY when limit = 1:
+
+{{{{calc_1.group}}}}
+{{{{calc_1.value}}}}
+
+
+IMPORTANT:
+
+Do NOT use:
+
+{{{{calc_1.value}}}}
+
+for GROUP_BY returning multiple rows.
+
+Do NOT use:
+
+{{{{calc_1.value}}}}
+
+for GROUP_BY_METRICS.
+
+Those operations return rows instead.
+
+
+=========================================================
+SUM
+=========================================================
+
+Use SUM for questions like:
+
 - total
-- overall amount
-- total amount
-- how much in total
-- how much did we make
-- overall value
-- combined value
 - total profit
-- total revenue
 - total sales
+- total quantity
+- combined amount
+- overall amount
 
-Examples:
 
-"What is the total profit?"
+Example:
 
-{{
-    "operation": "SUM",
-    "column": "Profit"
-}}
-
-"How much profit did we make?"
+"What is total profit?"
 
 {{
-    "operation": "SUM",
-    "column": "Profit"
+    "calculations": [
+        {{
+            "id": "calc_1",
+            "operation": "SUM",
+            "sheet": "Sheet1",
+            "column": "Profit"
+        }}
+    ],
+    "answer_template":
+        "The total profit is {{{{calc_1.value}}}}."
 }}
 
-"What was our overall profit?"
 
-{{
-    "operation": "SUM",
-    "column": "Profit"
-}}
+=========================================================
+AVERAGE
+=========================================================
 
+Use AVERAGE for:
 
-AVERAGE:
-Use AVERAGE when the user asks for:
 - average
 - mean
 - typical value
-- average amount
+
+
+=========================================================
+MAX
+=========================================================
+
+Use MAX when asking for the largest individual value.
 
 Example:
 
-"What is the average profit?"
+"What is the highest production quantity?"
 
-{{
-    "operation": "AVERAGE",
-    "column": "Profit"
-}}
+means:
 
-
-MAX:
-Use MAX when the user asks for:
-- highest value
-- maximum value
-- largest value
-- biggest value
-- highest profit
-- maximum profit
-
-Example:
-
-"What is the highest profit?"
-
-{{
-    "operation": "MAX",
-    "column": "Profit"
-}}
+MAX Prod. Qty
 
 
-MIN:
-Use MIN when the user asks for:
-- lowest value
-- minimum value
-- smallest value
-- lowest profit
-- minimum profit
+=========================================================
+MIN
+=========================================================
 
-Example:
-
-"What is the lowest profit?"
-
-{{
-    "operation": "MIN",
-    "column": "Profit"
-}}
+Use MIN when asking for the smallest individual value.
 
 
-COUNT:
-Use COUNT when the user asks:
+=========================================================
+COUNT
+=========================================================
+
+Use COUNT for:
+
 - how many
-- number of
+- number of records
 - count
-- how many records
-- how many entries
+
+
+=========================================================
+GROUP_BY
+=========================================================
+
+Use GROUP_BY when comparing ONE metric across categories.
 
 Example:
 
-"How many profit records are there?"
+"Which party has the highest production quantity?"
+
+
+Return:
 
 {{
-    "operation": "COUNT",
-    "column": "Profit"
+    "calculations": [
+        {{
+            "id": "calc_1",
+            "operation": "GROUP_BY",
+            "sheet": "Production",
+            "group_by": "Party",
+            "column": "Prod. Qty",
+            "aggregation": "SUM",
+            "sort": "DESC",
+            "limit": 1
+        }}
+    ],
+    "answer_template":
+        "{{{{calc_1.group}}}} had the highest production quantity with {{{{calc_1.value}}}}."
 }}
 
 
-GROUP_BY:
-Use GROUP_BY when the user asks to compare a metric
-between categories or asks which category has the
-highest or lowest total.
+IMPORTANT DIFFERENCE:
 
-Example:
-
-"Which country generated the highest profit?"
-
-{{
-    "operation": "GROUP_BY",
-    "group_by": "Country",
-    "column": "Profit",
-    "aggregation": "SUM",
-    "sort": "DESC",
-    "limit": 1
-}}
-
-Example:
-
-"Which country generated the lowest profit?"
-
-{{
-    "operation": "GROUP_BY",
-    "group_by": "Country",
-    "column": "Profit",
-    "aggregation": "SUM",
-    "sort": "ASC",
-    "limit": 1
-}}
-
-Example:
-
-"Which product generated the most profit?"
-
-{{
-    "operation": "GROUP_BY",
-    "group_by": "Product",
-    "column": "Profit",
-    "aggregation": "SUM",
-    "sort": "DESC",
-    "limit": 1
-}}
-
-
-IMPORTANT DISTINCTION
-
-Do NOT use GROUP_BY just because the question contains
-words such as "highest" or "lowest".
-
-For example:
-
-"What is the highest profit?"
+"What is the highest production quantity?"
 
 means:
 
-{{
-    "operation": "MAX",
-    "column": "Profit"
-}}
+MAX
 
-But:
 
-"Which country has the highest profit?"
+"Which party has the highest production quantity?"
 
 means:
 
+GROUP_BY Party
+SUM Prod. Qty
+DESC
+limit 1
+
+
+=========================================================
+GROUP_BY_METRICS
+=========================================================
+
+Use GROUP_BY_METRICS when the user requests:
+
+- every party
+- each party
+- party-wise data
+- every customer
+- customer-wise data
+- every product
+- product-wise data
+- multiple metrics for each group
+- balance/difference/remaining amount for each group
+- a table-like result
+
+
+GROUP_BY_METRICS contains:
+
+group_by
+metrics[]
+derived[]
+filters[]
+
+
+Example:
+
+"For every party show barley issued,
+production and balance from January 2026."
+
+
+Return:
+
 {{
-    "operation": "GROUP_BY",
-    "group_by": "Country",
-    "column": "Profit",
-    "aggregation": "SUM",
-    "sort": "DESC",
-    "limit": 1
+    "calculations": [
+        {{
+            "id": "calc_1",
+            "operation": "GROUP_BY_METRICS",
+            "sheet": "Production",
+            "group_by": "Party",
+
+            "metrics": [
+                {{
+                    "column": "QUANTITY OF RM",
+                    "aggregation": "SUM",
+                    "alias": "Barley Issued"
+                }},
+                {{
+                    "column": "Prod. Qty",
+                    "aggregation": "SUM",
+                    "alias": "Production"
+                }}
+            ],
+
+            "derived": [
+                {{
+                    "name": "Balance",
+                    "operation": "SUBTRACT",
+                    "left": "Barley Issued",
+                    "right": "Production"
+                }}
+            ],
+
+            "filters": [
+                {{
+                    "column": "Prod. Date",
+                    "operator": ">=",
+                    "value": "2026-01-01"
+                }}
+            ]
+        }}
+    ],
+
+    "answer_template":
+        "Here is the party-wise barley issued, production and balance from January 2026 to date."
 }}
 
 
-COLUMN MATCHING
+IMPORTANT:
 
-Match the user's requested metric to the closest available column.
+If the user asks for multiple metrics for every group,
+DO NOT create separate GROUP_BY calculations.
 
-Examples:
-
-profit -> Profit
-revenue -> Sales
-sales -> Sales
-units -> Units Sold
-manufacturing price -> Manufacturing Price
-sale price -> Sale Price
-discounts -> Discounts
-COGS -> COGS
-
-The column must exactly match one of the available columns.
-
-Never invent a column name.
-
-The group_by column must also exactly match one of the available columns.
+Use ONE GROUP_BY_METRICS operation.
 
 
-RULES
+=========================================================
+DERIVED CALCULATIONS
+=========================================================
 
-1. Understand the meaning of the question, not the exact wording.
-2. Do not calculate anything.
-3. Do not use financial data.
-4. Do not invent columns.
-5. Use only the supported operations.
-6. Return ONLY valid JSON.
-7. Do not return markdown.
-8. Do not return ```json.
-9. Do not include explanations.
-10. Return the smallest JSON object required for the operation.
+Currently supported derived operation:
 
-Return the appropriate JSON object.
+SUBTRACT
+
+
+Example:
+
+Balance = Barley Issued - Production
+
+
+Represent it as:
+
+{{
+    "name": "Balance",
+    "operation": "SUBTRACT",
+    "left": "Barley Issued",
+    "right": "Production"
+}}
+
+
+Do NOT calculate the result yourself.
+
+
+=========================================================
+FILTERS
+=========================================================
+
+Filters are applied BEFORE calculations.
+
+
+Example:
+
+"other than BMIPL"
+
+{{
+    "column": "Party",
+    "operator": "!=",
+    "value": "BMIPL"
+}}
+
+
+Example:
+
+"last month"
+
+{{
+    "column": "Prod. Date",
+    "operator": "LAST_MONTH"
+}}
+
+
+Example:
+
+"this month"
+
+{{
+    "column": "Prod. Date",
+    "operator": "THIS_MONTH"
+}}
+
+
+Example:
+
+"from January 2026"
+
+{{
+    "column": "Prod. Date",
+    "operator": ">=",
+    "value": "2026-01-01"
+}}
+
+
+Multiple filters use AND logic.
+
+
+=========================================================
+DATE COLUMN RULES
+=========================================================
+
+If the user explicitly specifies which date column to use,
+you MUST use that exact date column if it exists.
+
+Example:
+
+User says:
+
+"use Production Date"
+
+and schema contains:
+
+"Prod. Date"
+
+Then use:
+
+"Prod. Date"
+
+
+Do not replace it with:
+
+"Batch Date"
+"Date"
+"Date.1"
+
+
+=========================================================
+COLUMN RULES
+=========================================================
+
+Column names must EXACTLY match the schema.
+
+Never invent column names.
+
+If the user explicitly names a column and it exists,
+prefer that exact column.
+
+
+=========================================================
+SHEET RULES
+=========================================================
+
+Sheet names must EXACTLY match the schema.
+
+Never:
+
+- shorten sheet names
+- rename sheet names
+- invent sheet names
+
+
+=========================================================
+ANSWER TEMPLATE RULES
+=========================================================
+
+For scalar calculations:
+
+use placeholders.
+
+
+For GROUP_BY limit 1:
+
+use:
+
+{{{{calc_1.group}}}}
+{{{{calc_1.value}}}}
+
+
+For GROUP_BY_METRICS:
+
+return only a natural introduction.
+
+Example:
+
+"Here is the requested party-wise breakdown."
+
+
+Do NOT use:
+
+{{{{calc_1.value}}}}
+
+for GROUP_BY_METRICS because it returns rows.
+
+
+=========================================================
+STRICT OUTPUT RULES
+=========================================================
+
+1. Return ONLY valid JSON.
+2. No markdown.
+3. No ```json.
+4. No code fences.
+5. No explanations outside JSON.
+6. Never calculate spreadsheet values.
+7. Never invent sheet names.
+8. Never invent columns.
+9. Use only supported operations.
+10. Use only supported filters.
+11. Every calculation requires a unique id.
+12. Use calc_1, calc_2, calc_3 sequentially.
+13. Always return calculations as an array.
+14. Always return answer_template.
+15. Include every filter required by the question.
+16. Prefer GROUP_BY_METRICS when the user wants multiple
+    metrics for every group.
+17. Never reference .value for a multi-row table result.
+
+
+Return the JSON plan now.
 """
 
-        response = self.llm.generate(prompt)
+        response = self.llm.generate(
+            prompt
+        )
 
-        print("\n========== GEMINI OUTPUT ==========")
+        print(
+            "\n========== GEMINI OUTPUT =========="
+        )
         print(response)
-        print("===================================\n")
+        print(
+            "===================================\n"
+        )
 
         response = response.strip()
 
-        # Remove markdown code fences if Gemini still returns them
         if response.startswith("```"):
-            response = response.replace("```json", "")
-            response = response.replace("```", "")
+
+            response = response.replace(
+                "```json",
+                ""
+            )
+
+            response = response.replace(
+                "```",
+                ""
+            )
+
             response = response.strip()
 
         try:
-            plan = json.loads(response)
 
-            print("\n========== PARSED PLAN ==========")
-            print(json.dumps(plan, indent=2))
-            print("=================================\n")
-
-            return plan
+            plan = json.loads(
+                response
+            )
 
         except json.JSONDecodeError as error:
+
             raise ValueError(
                 f"Invalid query plan returned by AI: {response}"
             ) from error
+
+        if not isinstance(
+            plan,
+            dict
+        ):
+            raise ValueError(
+                "AI query plan must be a JSON object"
+            )
+
+        calculations = plan.get(
+            "calculations"
+        )
+
+        if not isinstance(
+            calculations,
+            list
+        ):
+            raise ValueError(
+                "AI query plan must contain calculations[]"
+            )
+
+        if not calculations:
+            raise ValueError(
+                "AI query plan contains no calculations"
+            )
+
+        answer_template = plan.get(
+            "answer_template"
+        )
+
+        if (
+            not isinstance(
+                answer_template,
+                str
+            )
+            or
+            not answer_template.strip()
+        ):
+            raise ValueError(
+                "AI query plan must contain answer_template"
+            )
+
+        calculation_ids = set()
+
+        for calculation in calculations:
+
+            if not isinstance(
+                calculation,
+                dict
+            ):
+                raise ValueError(
+                    "Each calculation must be an object"
+                )
+
+            calculation_id = (
+                calculation.get("id")
+            )
+
+            if not calculation_id:
+                raise ValueError(
+                    "Every calculation requires an id"
+                )
+
+            if calculation_id in calculation_ids:
+                raise ValueError(
+                    f"Duplicate calculation id: {calculation_id}"
+                )
+
+            calculation_ids.add(
+                calculation_id
+            )
+
+        print(
+            "\n========== PARSED PLAN =========="
+        )
+
+        print(
+            json.dumps(
+                plan,
+                indent=2
+            )
+        )
+
+        print(
+            "=================================\n"
+        )
+
+        return plan

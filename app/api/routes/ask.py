@@ -1,16 +1,23 @@
+import re
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services.dataset_service import get_dataset
-from app.services.calculation_service import (
-    calculate_sum,
-    calculate_average,
-    calculate_min,
-    calculate_max,
-    calculate_count,
-    calculate_grouped_sum,
+from app.services.dataset_service import (
+    get_dataset,
 )
-from app.services.query_planner import QueryPlanner
+
+from app.services.excel_service import (
+    build_excel_schema,
+)
+
+from app.services.calculation_service import (
+    execute_calculation,
+)
+
+from app.services.query_planner import (
+    QueryPlanner,
+)
 
 
 router = APIRouter(
@@ -20,235 +27,446 @@ router = APIRouter(
 
 
 class AskRequest(BaseModel):
+
     dataset_id: str
     question: str
 
 
+# =========================================================
+# Formatting
+# =========================================================
+
+
+def format_placeholder_value(
+    value
+):
+
+    if value is None:
+        return "N/A"
+
+    if isinstance(
+        value,
+        float
+    ):
+
+        if value.is_integer():
+
+            return f"{int(value):,}"
+
+        return (
+            f"{value:,.2f}"
+            .rstrip("0")
+            .rstrip(".")
+        )
+
+    if isinstance(
+        value,
+        int
+    ):
+
+        return f"{value:,}"
+
+    return str(
+        value
+    )
+
+
+# =========================================================
+# Template resolver
+# =========================================================
+
+
+def resolve_answer_template(
+    template: str,
+    calculation_results: list[dict]
+):
+
+    results_by_id = {
+        result["id"]: result
+        for result
+        in calculation_results
+    }
+
+    placeholder_pattern = re.compile(
+        r"\{\{([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\}\}"
+    )
+
+    def replace_placeholder(
+        match
+    ):
+
+        calculation_id = (
+            match.group(1)
+        )
+
+        field_name = (
+            match.group(2)
+        )
+
+        result = (
+            results_by_id.get(
+                calculation_id
+            )
+        )
+
+        if not result:
+
+            raise ValueError(
+                "Unknown calculation placeholder: "
+                f"{calculation_id}"
+            )
+
+        if field_name not in result:
+
+            raise ValueError(
+                "Unknown result field: "
+                f"{calculation_id}.{field_name}"
+            )
+
+        value = result[
+            field_name
+        ]
+
+        return format_placeholder_value(
+            value
+        )
+
+    return placeholder_pattern.sub(
+        replace_placeholder,
+        template
+    )
+
+
+# =========================================================
+# Plan validation
+# =========================================================
+
+
+def validate_plan(
+    plan: dict
+):
+
+    calculations = (
+        plan.get(
+            "calculations"
+        )
+    )
+
+    answer_template = (
+        plan.get(
+            "answer_template"
+        )
+    )
+
+    if not isinstance(
+        calculations,
+        list
+    ):
+
+        raise ValueError(
+            "Query plan must contain calculations[]"
+        )
+
+    if not calculations:
+
+        raise ValueError(
+            "Query plan contains no calculations"
+        )
+
+    if (
+        not isinstance(
+            answer_template,
+            str
+        )
+        or
+        not answer_template.strip()
+    ):
+
+        raise ValueError(
+            "Query plan must contain answer_template"
+        )
+
+    calculation_ids = set()
+
+    for calculation in calculations:
+
+        if not isinstance(
+            calculation,
+            dict
+        ):
+
+            raise ValueError(
+                "Each calculation must be an object"
+            )
+
+        calculation_id = (
+            calculation.get(
+                "id"
+            )
+        )
+
+        if not calculation_id:
+
+            raise ValueError(
+                "Every calculation requires an id"
+            )
+
+        if calculation_id in calculation_ids:
+
+            raise ValueError(
+                f"Duplicate calculation id: {calculation_id}"
+            )
+
+        calculation_ids.add(
+            calculation_id
+        )
+
+
+# =========================================================
+# API
+# =========================================================
+
+
 @router.post("")
-async def ask_nexamind(request: AskRequest):
+async def ask_nexamind(
+    request: AskRequest
+):
 
-    print("\n========================================")
-    print("QUESTION:", request.question)
-    print("DATASET:", request.dataset_id)
-    print("========================================")
+    print(
+        "\n========================================"
+    )
 
-    # ---------------------------------------------------------
-    # 1. Get uploaded dataset
-    # ---------------------------------------------------------
+    print(
+        "QUESTION:",
+        request.question
+    )
 
-    dataset = get_dataset(request.dataset_id)
+    print(
+        "DATASET:",
+        request.dataset_id
+    )
+
+    print(
+        "========================================"
+    )
+
+    # -----------------------------------------------------
+    # 1. Load dataset
+    # -----------------------------------------------------
+
+    dataset = get_dataset(
+        request.dataset_id
+    )
 
     if not dataset:
+
         raise HTTPException(
             status_code=404,
             detail="Dataset not found"
         )
 
-    # ---------------------------------------------------------
-    # 2. Get the first sheet for now
-    # ---------------------------------------------------------
+    sheets = dataset.get(
+        "sheets"
+    )
 
-    sheet_name = next(iter(dataset["sheets"]))
+    if not sheets:
 
-    dataframe = dataset["sheets"][sheet_name]
+        raise HTTPException(
+            status_code=400,
+            detail="Dataset contains no Excel sheets"
+        )
 
-    columns = [
-        str(column)
-        for column in dataframe.columns
-    ]
+    # -----------------------------------------------------
+    # 2. Build safe schema
+    # -----------------------------------------------------
 
-    print("\n========== DATASET ==========")
-    print("Sheet:", sheet_name)
-    print("Columns:", columns)
-    print("Rows:", len(dataframe))
-    print("=============================")
+    schema = build_excel_schema(
+        sheets
+    )
 
-    # ---------------------------------------------------------
-    # 3. Ask Gemini to understand the question
-    # ---------------------------------------------------------
+    print(
+        "\n========== SAFE SCHEMA =========="
+    )
+
+    print(
+        schema
+    )
+
+    print(
+        "================================="
+    )
+
+    # -----------------------------------------------------
+    # 3. Create AI plan
+    # -----------------------------------------------------
 
     planner = QueryPlanner()
 
-    plan = planner.create_plan(
-        request.question,
-        columns
-    )
+    try:
 
-    print("\n========== QUERY PLAN ==========")
-    print(plan)
-    print("================================")
-
-    # ---------------------------------------------------------
-    # 4. Extract plan
-    # ---------------------------------------------------------
-
-    operation = plan.get("operation")
-    column = plan.get("column")
-    group_by = plan.get("group_by")
-
-    print("Operation:", operation)
-    print("Column:", column)
-    print("Group By:", group_by)
-
-    # ---------------------------------------------------------
-    # 5. Validate operation
-    # ---------------------------------------------------------
-
-    supported_operations = {
-        "SUM",
-        "AVERAGE",
-        "MIN",
-        "MAX",
-        "COUNT",
-        "GROUP_BY",
-    }
-
-    if operation not in supported_operations:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported operation: {operation}"
+        plan = planner.create_plan(
+            question=request.question,
+            schema=schema
         )
 
-    # ---------------------------------------------------------
-    # 6. Validate calculation column
-    # ---------------------------------------------------------
+    except Exception as error:
 
-    if column not in columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid column: {column}"
+        print(
+            "Query planner error:",
+            error
         )
 
-    # ---------------------------------------------------------
-    # 7. GROUP_BY
-    # ---------------------------------------------------------
-
-    if operation == "GROUP_BY":
-
-        if not group_by:
-            raise HTTPException(
-                status_code=400,
-                detail="GROUP_BY operation requires a group_by column"
-            )
-
-        if group_by not in columns:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid group_by column: {group_by}"
-            )
-
-        sort = plan.get("sort", "DESC")
-        limit = plan.get("limit")
-
-        print("\n========== GROUP BY ==========")
-        print("Group By:", group_by)
-        print("Column:", column)
-        print("Aggregation:", plan.get("aggregation"))
-        print("Sort:", sort)
-        print("Limit:", limit)
-        print("==============================")
-
-        grouped_result = calculate_grouped_sum(
-            dataframe=dataframe,
-            group_by=group_by,
-            column=column,
-            sort=sort,
-            limit=limit
-        )
-
-        result = grouped_result.to_dict(
-            orient="records"
-        )
-
-        print("\n========== GROUP RESULT ==========")
-        print(result)
-        print("===================================")
-
-        return {
-            "question": request.question,
-            "operation": operation,
-            "group_by": group_by,
-            "column": column,
-            "aggregation": plan.get("aggregation"),
-            "result": result,
-            "sheet": sheet_name
-        }
-
-    # ---------------------------------------------------------
-    # 8. Normal calculations
-    # ---------------------------------------------------------
-
-    result = None
-
-    if operation == "SUM":
-
-        print("\nExecuting SUM...")
-
-        result = calculate_sum(
-            dataframe,
-            column
-        )
-
-    elif operation == "AVERAGE":
-
-        print("\nExecuting AVERAGE...")
-
-        result = calculate_average(
-            dataframe,
-            column
-        )
-
-    elif operation == "MIN":
-
-        print("\nExecuting MIN...")
-
-        result = calculate_min(
-            dataframe,
-            column
-        )
-
-    elif operation == "MAX":
-
-        print("\nExecuting MAX...")
-
-        result = calculate_max(
-            dataframe,
-            column
-        )
-
-    elif operation == "COUNT":
-
-        print("\nExecuting COUNT...")
-
-        result = calculate_count(
-            dataframe,
-            column
-        )
-
-    # ---------------------------------------------------------
-    # 9. Check calculation result
-    # ---------------------------------------------------------
-
-    print("\n========== CALCULATION RESULT ==========")
-    print("Operation:", operation)
-    print("Column:", column)
-    print("Result:", result)
-    print("========================================")
-
-    if result is None:
         raise HTTPException(
             status_code=500,
-            detail="Calculation did not produce a result"
+            detail="Unable to create analysis plan"
+        ) from error
+
+    print(
+        "\n========== QUERY PLAN =========="
+    )
+
+    print(
+        plan
+    )
+
+    print(
+        "================================"
+    )
+
+    # -----------------------------------------------------
+    # 4. Validate plan
+    # -----------------------------------------------------
+
+    try:
+
+        validate_plan(
+            plan
         )
 
-    # ---------------------------------------------------------
-    # 10. Return response
-    # ---------------------------------------------------------
+    except ValueError as error:
 
-    return {
-        "question": request.question,
-        "operation": operation,
-        "column": column,
-        "result": float(result),
-        "sheet": sheet_name
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        ) from error
+
+    calculations = (
+        plan[
+            "calculations"
+        ]
+    )
+
+    answer_template = (
+        plan[
+            "answer_template"
+        ]
+    )
+
+    # -----------------------------------------------------
+    # 5. Execute locally
+    # -----------------------------------------------------
+
+    calculation_results = []
+
+    for calculation in calculations:
+
+        print(
+            "\n========== EXECUTING =========="
+        )
+
+        print(
+            calculation
+        )
+
+        print(
+            "================================"
+        )
+
+        try:
+
+            result = execute_calculation(
+                sheets=sheets,
+                calculation=calculation
+            )
+
+        except ValueError as error:
+
+            print(
+                "Calculation error:",
+                error
+            )
+
+            raise HTTPException(
+                status_code=400,
+                detail=str(error)
+            ) from error
+
+        calculation_results.append(
+            result
+        )
+
+        print(
+            "\n========== RESULT =========="
+        )
+
+        print(
+            result
+        )
+
+        print(
+            "============================"
+        )
+
+    # -----------------------------------------------------
+    # 6. Resolve scalar placeholders
+    # -----------------------------------------------------
+
+    try:
+
+        final_answer = (
+            resolve_answer_template(
+                template=answer_template,
+                calculation_results=calculation_results
+            )
+        )
+
+    except ValueError as error:
+
+        print(
+            "Answer template error:",
+            error
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        ) from error
+
+    # -----------------------------------------------------
+    # 7. Return
+    # -----------------------------------------------------
+
+    response = {
+        "question":
+            request.question,
+
+        "answer":
+            final_answer,
+
+        "calculations":
+            calculation_results,
     }
+
+    print(
+        "\n========== FINAL RESPONSE =========="
+    )
+
+    print(
+        response
+    )
+
+    print(
+        "===================================="
+    )
+
+    return response

@@ -208,69 +208,21 @@ function App() {
   // --------------------------------------------------
 
   const renderAnswerResult = (answer) => {
-    if (
-      answer.operation === "GROUP_BY" &&
-      Array.isArray(answer.result)
-    ) {
+    if (answer.answer) {
       return (
-        <div className="grouped-result">
-          {answer.result.map(
-            (row, index) => (
-              <div
-                className="grouped-result-row"
-                key={index}
-              >
-                <div className="grouped-result-name">
-                  {row[answer.group_by]}
-                </div>
-
-                <div className="grouped-result-value">
-                  {Number(
-                    row[answer.column]
-                  ).toLocaleString(
-                    undefined,
-                    {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }
-                  )}
-                </div>
-              </div>
-            )
-          )}
+        <div className="answer-result">
+          {answer.answer}
         </div>
       );
     }
 
-    if (
-      answer.result !== undefined &&
-      answer.result !== null
-    ) {
-      const numericResult =
-        Number(answer.result);
-
-      if (!Number.isNaN(numericResult)) {
-        return (
-          <div className="answer-result">
-            {numericResult.toLocaleString(
-              undefined,
-              {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }
-            )}
-          </div>
-        );
-      }
-    }
-
     return (
       <div className="answer-message">
-        {answer.message ||
-          "NexaMind could not calculate this result."}
+        NexaMind could not calculate this result.
       </div>
     );
   };
+
 
   // --------------------------------------------------
   // Render
@@ -647,53 +599,62 @@ function App() {
                   <div className="answer-content">
 
                     <div className="answer-label">
-                      Result
+                      Answer
                     </div>
 
                     {renderAnswerResult(
                       answer
                     )}
 
-                    {answer.operation && (
-                      <div className="answer-details">
+                    {Array.isArray(answer.calculations) &&
+                      answer.calculations.length > 0 && (
+                        <div className="answer-details">
 
-                        {answer.operation}
+                          {answer.calculations.map(
+                            (calculation) => (
+                              <div
+                                key={calculation.id}
+                              >
+                                {calculation.operation}
 
-                        {answer.column && (
-                          <>
-                            {" "}of{" "}
+                                {calculation.column && (
+                                  <>
+                                    {" "}of{" "}
 
-                            <strong>
-                              {answer.column}
-                            </strong>
-                          </>
-                        )}
+                                    <strong>
+                                      {calculation.column}
+                                    </strong>
+                                  </>
+                                )}
 
-                        {answer.operation ===
-                          "GROUP_BY" &&
-                          answer.group_by && (
-                            <>
-                              {" "}
-                              grouped by{" "}
+                                {calculation.operation ===
+                                  "GROUP_BY" &&
+                                  calculation.group_by && (
+                                    <>
+                                      {" "}
+                                      grouped by{" "}
 
-                              <strong>
-                                {answer.group_by}
-                              </strong>
-                            </>
+                                      <strong>
+                                        {calculation.group_by}
+                                      </strong>
+                                    </>
+                                  )}
+
+                                {calculation.sheet && (
+                                  <>
+                                    {" "}from{" "}
+
+                                    <strong>
+                                      {calculation.sheet}
+                                    </strong>
+                                  </>
+                                )}
+                              </div>
+                            )
                           )}
 
-                        {answer.sheet && (
-                          <>
-                            {" "}from{" "}
-
-                            <strong>
-                              {answer.sheet}
-                            </strong>
-                          </>
-                        )}
-
-                      </div>
-                    )}
+                        </div>
+                      )}
 
                   </div>
 
