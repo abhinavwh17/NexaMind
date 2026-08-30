@@ -207,21 +207,149 @@ function App() {
   // Render result
   // --------------------------------------------------
 
-  const renderAnswerResult = (answer) => {
-    if (answer.answer) {
-      return (
-        <div className="answer-result">
-          {answer.answer}
-        </div>
-      );
-    }
+// --------------------------------------------------
+// Format table values
+// --------------------------------------------------
 
+const formatResultValue = (value) => {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  if (typeof value === "number") {
+    return value.toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+  }
+
+  return String(value);
+};
+
+
+// --------------------------------------------------
+// Render calculation table
+// --------------------------------------------------
+
+const renderCalculationTable = (calculation) => {
+  if (
+    !Array.isArray(calculation.rows) ||
+    calculation.rows.length === 0
+  ) {
+    return null;
+  }
+
+  const columns = Object.keys(
+    calculation.rows[0]
+  );
+
+  return (
+    <div
+      className="result-table-container"
+      key={`table-${calculation.id}`}
+    >
+      <div className="result-table-header">
+        <div>
+          Detailed breakdown
+        </div>
+
+        <div className="result-table-count">
+          {calculation.rows.length}{" "}
+          {calculation.rows.length === 1
+            ? "row"
+            : "rows"}
+        </div>
+      </div>
+
+      <div className="result-table-scroll">
+        <table className="result-table">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {calculation.rows.map(
+              (row, rowIndex) => (
+                <tr
+                  key={`${calculation.id}-${rowIndex}`}
+                >
+                  {columns.map((column) => (
+                    <td key={column}>
+                      {formatResultValue(
+                        row[column]
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              )
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+
+// --------------------------------------------------
+// Render answer
+// --------------------------------------------------
+
+const renderAnswerResult = (answer) => {
+  const calculations = Array.isArray(
+    answer.calculations
+  )
+    ? answer.calculations
+    : [];
+
+  const tableCalculations =
+    calculations.filter(
+      (calculation) =>
+        Array.isArray(calculation.rows) &&
+        calculation.rows.length > 1
+    );
+
+  const hasAnswer =
+    answer.answer &&
+    answer.answer.trim().length > 0;
+
+  if (
+    !hasAnswer &&
+    tableCalculations.length === 0
+  ) {
     return (
       <div className="answer-message">
         NexaMind could not calculate this result.
       </div>
     );
-  };
+  }
+
+  return (
+    <>
+      {/* Inline / natural-language answer */}
+
+      {hasAnswer && (
+        <div className="answer-result">
+          {answer.answer}
+        </div>
+      )}
+
+      {/* Table result */}
+
+      {tableCalculations.map(
+        (calculation) =>
+          renderCalculationTable(
+            calculation
+          )
+      )}
+    </>
+  );
+};
 
 
   // --------------------------------------------------
@@ -627,9 +755,13 @@ function App() {
                                   </>
                                 )}
 
-                                {calculation.operation ===
-                                  "GROUP_BY" &&
-                                  calculation.group_by && (
+                                {(
+                              calculation.operation ===
+                              "GROUP_BY" ||
+                              calculation.operation ===
+                              "GROUP_BY_METRICS"
+                              ) &&
+                              calculation.group_by && (
                                     <>
                                       {" "}
                                       grouped by{" "}

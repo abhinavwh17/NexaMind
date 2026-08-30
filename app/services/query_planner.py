@@ -6,7 +6,9 @@ from app.llm.client import LLMClient
 class QueryPlanner:
 
     def __init__(self):
+
         self.llm = LLMClient()
+
 
     def create_plan(
         self,
@@ -15,31 +17,65 @@ class QueryPlanner:
     ):
 
         prompt = f"""
-You are the query planning engine for NexaMind,
-a privacy-focused financial analysis application.
+You are the query planning engine for NexaMind.
 
-Your job is to convert the user's natural-language question
-into a structured calculation plan that the Python backend
-can execute locally.
+NexaMind is a privacy-focused financial analysis application.
 
-You are NOT a calculator.
+Your only job is to convert the user's natural-language
+question into a structured READ-ONLY calculation plan.
 
-You NEVER receive actual spreadsheet row data.
+Python executes all calculations locally.
 
-You only receive:
+You are NOT the calculator.
+
+
+=========================================================
+PRIVACY
+=========================================================
+
+You NEVER receive spreadsheet row data.
+
+You receive only:
 
 - sheet names
 - column names
 - column types
+- user question
 
-The actual spreadsheet data remains private inside Python.
+Never request spreadsheet row data.
 
-Never calculate the final answer yourself.
+Never calculate actual spreadsheet values.
+
 Never invent spreadsheet values.
 
 
 =========================================================
-AVAILABLE WORKBOOK SCHEMA
+SOURCE DATA IS READ-ONLY
+=========================================================
+
+Never create an operation that modifies source data.
+
+Forbidden operations include:
+
+DELETE
+DROP
+UPDATE
+INSERT
+OVERWRITE
+RENAME
+REPLACE
+CLEAR
+REMOVE
+APPEND
+WRITE
+SAVE
+TRUNCATE
+
+The uploaded workbook must remain unchanged.
+
+
+=========================================================
+WORKBOOK SCHEMA
 =========================================================
 
 {json.dumps(schema, indent=2)}
@@ -61,12 +97,34 @@ AVERAGE
 MIN
 MAX
 COUNT
+COUNT_DISTINCT
+MEDIAN
+STDDEV
+VARIANCE
 GROUP_BY
 GROUP_BY_METRICS
+DISTINCT_VALUES
+FIRST
+LAST
 
 
 =========================================================
-SUPPORTED FILTER OPERATORS
+SUPPORTED GROUP AGGREGATIONS
+=========================================================
+
+SUM
+AVERAGE
+MIN
+MAX
+COUNT
+COUNT_DISTINCT
+MEDIAN
+STDDEV
+VARIANCE
+
+
+=========================================================
+SUPPORTED FILTERS
 =========================================================
 
 =
@@ -75,71 +133,83 @@ SUPPORTED FILTER OPERATORS
 >=
 <
 <=
+IN
+NOT_IN
+CONTAINS
+NOT_CONTAINS
+BETWEEN
+IS_NULL
+IS_NOT_NULL
 LAST_MONTH
 THIS_MONTH
 
 
 =========================================================
-STANDARD RESPONSE FORMAT
+SUPPORTED DERIVED OPERATIONS
+=========================================================
+
+ADD
+SUBTRACT
+MULTIPLY
+DIVIDE
+PERCENTAGE
+
+
+=========================================================
+RESPONSE FORMAT
 =========================================================
 
 Always return:
 
 {{
-    "calculations": [...],
-    "answer_template": "..."
+    "calculations": [],
+    "answer_template": ""
 }}
 
 
 =========================================================
-SCALAR PLACEHOLDERS
+CALCULATION IDS
 =========================================================
 
-For SUM, AVERAGE, MIN, MAX and COUNT:
+Every calculation requires a unique ID.
 
-{{{{calc_1.value}}}}
+Use:
 
+calc_1
+calc_2
+calc_3
 
-For GROUP_BY when limit = 1:
-
-{{{{calc_1.group}}}}
-{{{{calc_1.value}}}}
-
-
-IMPORTANT:
-
-Do NOT use:
-
-{{{{calc_1.value}}}}
-
-for GROUP_BY returning multiple rows.
-
-Do NOT use:
-
-{{{{calc_1.value}}}}
-
-for GROUP_BY_METRICS.
-
-Those operations return rows instead.
+Use sequential IDs.
 
 
 =========================================================
+SCALAR CALCULATIONS
+=========================================================
+
+Scalar operations include:
+
 SUM
-=========================================================
+AVERAGE
+MIN
+MAX
+COUNT
+COUNT_DISTINCT
+MEDIAN
+STDDEV
+VARIANCE
 
-Use SUM for questions like:
 
-- total
-- total profit
-- total sales
-- total quantity
-- combined amount
-- overall amount
+Use:
+
+{{{{calc_1.value}}}}
 
 
 Example:
 
-"What is total profit?"
+"What is the total profit?"
+
+
+Return:
 
 {{
     "calculations": [
@@ -156,54 +226,25 @@ Example:
 
 
 =========================================================
-AVERAGE
-=========================================================
-
-Use AVERAGE for:
-
-- average
-- mean
-- typical value
-
-
-=========================================================
-MAX
-=========================================================
-
-Use MAX when asking for the largest individual value.
-
-Example:
-
-"What is the highest production quantity?"
-
-means:
-
-MAX Prod. Qty
-
-
-=========================================================
-MIN
-=========================================================
-
-Use MIN when asking for the smallest individual value.
-
-
-=========================================================
-COUNT
-=========================================================
-
-Use COUNT for:
-
-- how many
-- number of records
-- count
-
-
-=========================================================
 GROUP_BY
 =========================================================
 
-Use GROUP_BY when comparing ONE metric across categories.
+Use GROUP_BY when the user wants ONE metric grouped
+by one or more categories.
+
+
+GROUP_BY may contain ONE grouping column:
+
+"group_by": "Party"
+
+
+OR MULTIPLE grouping columns:
+
+"group_by": [
+    "Party",
+    "VARIETY"
+]
+
 
 Example:
 
@@ -226,59 +267,108 @@ Return:
         }}
     ],
     "answer_template":
-        "{{{{calc_1.group}}}} had the highest production quantity with {{{{calc_1.value}}}}."
+        "{{{{calc_1.group}}}} has the highest production quantity with {{{{calc_1.value}}}}."
 }}
 
 
-IMPORTANT DIFFERENCE:
+=========================================================
+MULTIPLE GROUPING COLUMNS
+=========================================================
 
-"What is the highest production quantity?"
+Use multiple grouping columns when the question asks
+for a breakdown by multiple dimensions.
 
-means:
+Examples:
+
+customer-wise and variety-wise
+party and variety
+region and product
+customer and product
+party and month
+country and category
+
+
+Example:
+
+"Give production quantity party-wise and variety-wise."
+
+
+Use:
+
+"group_by": [
+    "Party",
+    "VARIETY"
+]
+
+
+Do NOT choose only Party.
+
+Do NOT choose only VARIETY.
+
+Both requested dimensions must be included.
+
+
+=========================================================
+GROUP_BY AGGREGATION
+=========================================================
+
+Choose aggregation according to meaning.
+
+Examples:
+
+
+"total production by party"
+
+aggregation:
+
+SUM
+
+
+"average yield by variety"
+
+aggregation:
+
+AVERAGE
+
+
+"highest value by party"
+
+aggregation:
 
 MAX
 
 
-"Which party has the highest production quantity?"
+"lowest value by party"
 
-means:
+aggregation:
 
-GROUP_BY Party
-SUM Prod. Qty
-DESC
-limit 1
+MIN
+
+
+"number of records by party"
+
+aggregation:
+
+COUNT
+
+
+"number of different batches by party"
+
+aggregation:
+
+COUNT_DISTINCT
 
 
 =========================================================
 GROUP_BY_METRICS
 =========================================================
 
-Use GROUP_BY_METRICS when the user requests:
-
-- every party
-- each party
-- party-wise data
-- every customer
-- customer-wise data
-- every product
-- product-wise data
-- multiple metrics for each group
-- balance/difference/remaining amount for each group
-- a table-like result
-
-
-GROUP_BY_METRICS contains:
-
-group_by
-metrics[]
-derived[]
-filters[]
-
+Use GROUP_BY_METRICS when the user requests multiple
+metrics for every group.
 
 Example:
 
-"For every party show barley issued,
-production and balance from January 2026."
+"Show total production and average yield for every variety."
 
 
 Return:
@@ -289,217 +379,532 @@ Return:
             "id": "calc_1",
             "operation": "GROUP_BY_METRICS",
             "sheet": "Production",
-            "group_by": "Party",
-
+            "group_by": "VARIETY",
             "metrics": [
-                {{
-                    "column": "QUANTITY OF RM",
-                    "aggregation": "SUM",
-                    "alias": "Barley Issued"
-                }},
                 {{
                     "column": "Prod. Qty",
                     "aggregation": "SUM",
-                    "alias": "Production"
+                    "alias":
+                        "Total Production Quantity"
+                }},
+                {{
+                    "column": "YEILD (%)",
+                    "aggregation": "AVERAGE",
+                    "alias":
+                        "Average Yield"
+                }}
+            ]
+        }}
+    ],
+    "answer_template":
+        "Here are the variety-wise details."
+}}
+
+
+=========================================================
+GROUP_BY_METRICS WITH MULTIPLE GROUPS
+=========================================================
+
+GROUP_BY_METRICS may also use multiple grouping columns.
+
+
+Example question:
+
+"Give customer-wise and variety-wise barley issued,
+production quantity and balance."
+
+
+Return:
+
+{{
+    "calculations": [
+        {{
+            "id": "calc_1",
+
+            "operation":
+                "GROUP_BY_METRICS",
+
+            "sheet":
+                "Production",
+
+            "group_by": [
+                "Party",
+                "VARIETY"
+            ],
+
+            "metrics": [
+                {{
+                    "column":
+                        "QUANTITY OF RM",
+
+                    "aggregation":
+                        "SUM",
+
+                    "alias":
+                        "Barley Issued"
+                }},
+                {{
+                    "column":
+                        "Prod. Qty",
+
+                    "aggregation":
+                        "SUM",
+
+                    "alias":
+                        "Production Qty"
                 }}
             ],
 
             "derived": [
                 {{
-                    "name": "Balance",
-                    "operation": "SUBTRACT",
-                    "left": "Barley Issued",
-                    "right": "Production"
-                }}
-            ],
+                    "name":
+                        "Balance Qty",
 
-            "filters": [
-                {{
-                    "column": "Prod. Date",
-                    "operator": ">=",
-                    "value": "2026-01-01"
+                    "operation":
+                        "SUBTRACT",
+
+                    "left":
+                        "Barley Issued",
+
+                    "right":
+                        "Production Qty"
                 }}
             ]
         }}
     ],
 
     "answer_template":
-        "Here is the party-wise barley issued, production and balance from January 2026 to date."
+        "Here is the customer-wise and variety-wise summary."
 }}
 
 
-IMPORTANT:
+The resulting local table can contain:
 
-If the user asks for multiple metrics for every group,
-DO NOT create separate GROUP_BY calculations.
-
-Use ONE GROUP_BY_METRICS operation.
+Party
+VARIETY
+Barley Issued
+Production Qty
+Balance Qty
 
 
 =========================================================
 DERIVED CALCULATIONS
 =========================================================
 
-Currently supported derived operation:
+Derived calculations are performed by Python.
 
+Supported:
+
+ADD
 SUBTRACT
+MULTIPLY
+DIVIDE
+PERCENTAGE
 
 
 Example:
 
-Balance = Barley Issued - Production
+Balance = Barley Issued - Production Qty
 
 
-Represent it as:
+Use:
+
+"derived": [
+    {{
+        "name":
+            "Balance Qty",
+
+        "operation":
+            "SUBTRACT",
+
+        "left":
+            "Barley Issued",
+
+        "right":
+            "Production Qty"
+    }}
+]
+
+
+Never calculate Balance yourself.
+
+
+=========================================================
+PERCENTAGE
+=========================================================
+
+Example:
+
+Achievement % = Actual / Target * 100
+
+
+Use:
 
 {{
-    "name": "Balance",
-    "operation": "SUBTRACT",
-    "left": "Barley Issued",
-    "right": "Production"
+    "name":
+        "Achievement %",
+
+    "operation":
+        "PERCENTAGE",
+
+    "left":
+        "Actual",
+
+    "right":
+        "Target"
 }}
-
-
-Do NOT calculate the result yourself.
 
 
 =========================================================
 FILTERS
 =========================================================
 
-Filters are applied BEFORE calculations.
+Filters are always applied BEFORE calculations.
 
 
 Example:
 
-"other than BMIPL"
+Other than BMIPL:
 
 {{
-    "column": "Party",
-    "operator": "!=",
-    "value": "BMIPL"
+    "column":
+        "Party",
+
+    "operator":
+        "!=",
+
+    "value":
+        "BMIPL"
 }}
 
 
 Example:
+
+Party equals BMIPL:
+
+{{
+    "column":
+        "Party",
+
+    "operator":
+        "=",
+
+    "value":
+        "BMIPL"
+}}
+
+
+Example:
+
+Quantity greater than 100:
+
+{{
+    "column":
+        "Quantity",
+
+    "operator":
+        ">",
+
+    "value":
+        100
+}}
+
+
+=========================================================
+BETWEEN
+=========================================================
+
+Example:
+
+Between January 1 and January 31:
+
+
+{{
+    "column":
+        "Prod. Date",
+
+    "operator":
+        "BETWEEN",
+
+    "value": [
+        "2026-01-01",
+        "2026-01-31"
+    ]
+}}
+
+
+=========================================================
+IN
+=========================================================
+
+Example:
+
+Party A or Party B:
+
+
+{{
+    "column":
+        "Party",
+
+    "operator":
+        "IN",
+
+    "value": [
+        "Party A",
+        "Party B"
+    ]
+}}
+
+
+=========================================================
+CONTAINS
+=========================================================
+
+Example:
+
+Party contains Distilleries:
+
+
+{{
+    "column":
+        "Party",
+
+    "operator":
+        "CONTAINS",
+
+    "value":
+        "Distilleries"
+}}
+
+
+=========================================================
+NULL VALUES
+=========================================================
+
+Use:
+
+IS_NULL
+
+or:
+
+IS_NOT_NULL
+
+
+Example:
+
+{{
+    "column":
+        "Party",
+
+    "operator":
+        "IS_NULL"
+}}
+
+
+=========================================================
+DATE FILTERS
+=========================================================
+
+For:
 
 "last month"
 
-{{
-    "column": "Prod. Date",
-    "operator": "LAST_MONTH"
-}}
+use:
+
+LAST_MONTH
 
 
-Example:
+For:
 
 "this month"
 
-{{
-    "column": "Prod. Date",
-    "operator": "THIS_MONTH"
-}}
+use:
+
+THIS_MONTH
 
 
-Example:
+For:
 
 "from January 2026"
 
+use:
+
 {{
-    "column": "Prod. Date",
-    "operator": ">=",
-    "value": "2026-01-01"
+    "column":
+        "<appropriate date column>",
+
+    "operator":
+        ">=",
+
+    "value":
+        "2026-01-01"
 }}
 
 
-Multiple filters use AND logic.
+If the user explicitly specifies a date column,
+you MUST use that column if it exists.
 
-
-=========================================================
-DATE COLUMN RULES
-=========================================================
-
-If the user explicitly specifies which date column to use,
-you MUST use that exact date column if it exists.
 
 Example:
 
 User says:
 
-"use Production Date"
+"Use production date"
 
-and schema contains:
+
+Schema contains:
 
 "Prod. Date"
+
 
 Then use:
 
 "Prod. Date"
 
 
-Do not replace it with:
+Do not use Batch Date or another date column.
 
-"Batch Date"
-"Date"
-"Date.1"
+
+=========================================================
+MAX VS GROUP BY
+=========================================================
+
+Question:
+
+"What is the highest production quantity?"
+
+means:
+
+MAX
+
+
+Question:
+
+"Which party has the highest production quantity?"
+
+means:
+
+GROUP_BY
+Party
+SUM Prod. Qty
+DESC
+limit 1
+
+
+=========================================================
+DISTINCT VALUES
+=========================================================
+
+Use DISTINCT_VALUES for questions such as:
+
+- list all varieties
+- what parties exist
+- list unique products
+- what regions are available
+
+
+Example:
+
+{{
+    "id":
+        "calc_1",
+
+    "operation":
+        "DISTINCT_VALUES",
+
+    "sheet":
+        "Production",
+
+    "column":
+        "VARIETY"
+}}
+
+
+=========================================================
+FIRST / LAST
+=========================================================
+
+FIRST and LAST refer to existing row order.
+
+Do NOT use LAST for maximum.
+
+Do NOT use FIRST for minimum.
+
+
+=========================================================
+TABLE VS INLINE ANSWER
+=========================================================
+
+For scalar calculations:
+
+Use placeholders.
+
+
+For GROUP_BY returning exactly one row:
+
+You may use:
+
+{{{{calc_1.group}}}}
+
+and:
+
+{{{{calc_1.value}}}}
+
+
+For GROUP_BY returning multiple rows:
+
+Use a short introduction.
+
+Do NOT use:
+
+{{{{calc_1.value}}}}
+
+
+For GROUP_BY_METRICS:
+
+Use a short introduction.
+
+The application displays rows as a table.
 
 
 =========================================================
 COLUMN RULES
 =========================================================
 
-Column names must EXACTLY match the schema.
+Every source column name must EXACTLY match the schema.
 
-Never invent column names.
+Never invent source columns.
 
-If the user explicitly names a column and it exists,
-prefer that exact column.
+Never alter spelling.
+
+Never alter spaces.
+
+Never alter capitalization in the returned source
+column name.
+
+
+Aliases may be user-friendly.
 
 
 =========================================================
 SHEET RULES
 =========================================================
 
-Sheet names must EXACTLY match the schema.
+Sheet names must EXACTLY match schema.
 
-Never:
+Never invent sheet names.
 
-- shorten sheet names
-- rename sheet names
-- invent sheet names
+Never shorten sheet names.
 
 
 =========================================================
-ANSWER TEMPLATE RULES
+PLAN SIZE
 =========================================================
 
-For scalar calculations:
+Use the smallest plan that correctly answers the question.
 
-use placeholders.
-
-
-For GROUP_BY limit 1:
-
-use:
-
-{{{{calc_1.group}}}}
-{{{{calc_1.value}}}}
-
-
-For GROUP_BY_METRICS:
-
-return only a natural introduction.
-
-Example:
-
-"Here is the requested party-wise breakdown."
-
-
-Do NOT use:
-
-{{{{calc_1.value}}}}
-
-for GROUP_BY_METRICS because it returns rows.
+If one GROUP_BY_METRICS calculation can answer the question,
+do not create multiple separate GROUP_BY calculations.
 
 
 =========================================================
@@ -507,95 +912,138 @@ STRICT OUTPUT RULES
 =========================================================
 
 1. Return ONLY valid JSON.
-2. No markdown.
-3. No ```json.
-4. No code fences.
-5. No explanations outside JSON.
-6. Never calculate spreadsheet values.
-7. Never invent sheet names.
-8. Never invent columns.
-9. Use only supported operations.
-10. Use only supported filters.
-11. Every calculation requires a unique id.
-12. Use calc_1, calc_2, calc_3 sequentially.
-13. Always return calculations as an array.
-14. Always return answer_template.
-15. Include every filter required by the question.
-16. Prefer GROUP_BY_METRICS when the user wants multiple
-    metrics for every group.
-17. Never reference .value for a multi-row table result.
+2. Do not return markdown.
+3. Do not return code fences.
+4. Do not include explanations outside JSON.
+5. Never calculate spreadsheet values.
+6. Never invent spreadsheet values.
+7. Never modify source data.
+8. Never create mutation operations.
+9. Never invent sheet names.
+10. Never invent source columns.
+11. Use exact schema sheet names.
+12. Use exact schema column names.
+13. Use only supported operations.
+14. Use only supported filters.
+15. Use only supported aggregations.
+16. Use only supported derived operations.
+17. Always return calculations[].
+18. Always return answer_template.
+19. Every calculation needs a unique id.
+20. Apply filters before calculations.
+21. group_by may be a string OR array.
+22. Use multiple group_by columns when the user asks
+    for analysis across multiple dimensions.
+23. Never reference .value for multi-row results.
 
 
 Return the JSON plan now.
 """
 
-        response = self.llm.generate(
-            prompt
+        response = (
+            self.llm.generate(
+                prompt
+            )
         )
 
         print(
             "\n========== GEMINI OUTPUT =========="
         )
-        print(response)
+
+        print(
+            response
+        )
+
         print(
             "===================================\n"
         )
 
-        response = response.strip()
+        response = (
+            response.strip()
+        )
 
-        if response.startswith("```"):
+        # -------------------------------------------------
+        # Defensive code fence cleanup
+        # -------------------------------------------------
 
-            response = response.replace(
-                "```json",
-                ""
+        if response.startswith(
+            "```"
+        ):
+
+            response = (
+                response
+                .replace(
+                    "```json",
+                    ""
+                )
+                .replace(
+                    "```",
+                    ""
+                )
+                .strip()
             )
 
-            response = response.replace(
-                "```",
-                ""
-            )
-
-            response = response.strip()
+        # -------------------------------------------------
+        # Parse JSON
+        # -------------------------------------------------
 
         try:
 
-            plan = json.loads(
-                response
+            plan = (
+                json.loads(
+                    response
+                )
             )
 
         except json.JSONDecodeError as error:
 
             raise ValueError(
-                f"Invalid query plan returned by AI: {response}"
+                "Invalid query plan returned by AI: "
+                f"{response}"
             ) from error
 
         if not isinstance(
             plan,
             dict
         ):
+
             raise ValueError(
-                "AI query plan must be a JSON object"
+                "AI query plan must be an object"
             )
 
-        calculations = plan.get(
-            "calculations"
+        # -------------------------------------------------
+        # Validate calculations
+        # -------------------------------------------------
+
+        calculations = (
+            plan.get(
+                "calculations"
+            )
         )
 
         if not isinstance(
             calculations,
             list
         ):
+
             raise ValueError(
                 "AI query plan must contain calculations[]"
             )
 
         if not calculations:
+
             raise ValueError(
                 "AI query plan contains no calculations"
             )
 
-        answer_template = plan.get(
-            "answer_template"
+        # -------------------------------------------------
+        # Validate answer template
+        # -------------------------------------------------
+
+        answer_template = (
+            plan.get(
+                "answer_template"
+            )
         )
 
         if (
@@ -606,9 +1054,14 @@ Return the JSON plan now.
             or
             not answer_template.strip()
         ):
+
             raise ValueError(
                 "AI query plan must contain answer_template"
             )
+
+        # -------------------------------------------------
+        # Unique IDs
+        # -------------------------------------------------
 
         calculation_ids = set()
 
@@ -618,22 +1071,31 @@ Return the JSON plan now.
                 calculation,
                 dict
             ):
+
                 raise ValueError(
                     "Each calculation must be an object"
                 )
 
             calculation_id = (
-                calculation.get("id")
+                calculation.get(
+                    "id"
+                )
             )
 
             if not calculation_id:
+
                 raise ValueError(
                     "Every calculation requires an id"
                 )
 
-            if calculation_id in calculation_ids:
+            if (
+                calculation_id
+                in calculation_ids
+            ):
+
                 raise ValueError(
-                    f"Duplicate calculation id: {calculation_id}"
+                    "Duplicate calculation id: "
+                    f"{calculation_id}"
                 )
 
             calculation_ids.add(
