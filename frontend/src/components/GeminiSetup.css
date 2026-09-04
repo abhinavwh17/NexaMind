@@ -1,0 +1,122 @@
+.gemini-setup-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(
+      circle at top,
+      rgba(111, 78, 246, 0.12),
+      transparent 40%
+    ),
+    #f7f8fc;
+}
+
+.gemini-setup-card {
+  width: 100%;
+  max-width: 460px;
+  padding: 42px;
+  border-radius: 24px;
+  background: white;
+  box-shadow:
+    0 20px 60px rgba(31, 38, 60, 0.12);
+}
+
+.gemini-setup-logo {
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  font-size: 28px;
+  background: #6f4ef6;
+  color: white;
+}
+
+.gemini-setup-card h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #20283a;
+}
+
+.gemini-setup-card h2 {
+  margin: 22px 0 8px;
+  font-size: 22px;
+  color: #20283a;
+}
+
+.gemini-setup-description {
+  margin: 0 0 28px;
+  line-height: 1.6;
+  color: #6b7280;
+}
+
+.gemini-key-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #343b4f;
+}
+
+.gemini-key-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d9dce5;
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+}
+
+.gemini-key-input-wrapper input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  padding: 14px 16px;
+  font-size: 14px;
+}
+
+.gemini-key-toggle {
+  border: 0;
+  background: transparent;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #6f4ef6;
+}
+
+.gemini-connect-button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  background: #6f4ef6;
+  color: white;
+}
+
+.gemini-connect-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gemini-setup-security {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: #7a8191;
+}
+
+.gemini-setup-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff1f1;
+  color: #b42318;
+  font-size: 13px;
+}

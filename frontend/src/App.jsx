@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import GeminiSetup from "./components/GeminiSetup";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -8,6 +9,11 @@ function App() {
 
   const [files, setFiles] = useState([]);
   const [datasetId, setDatasetId] = useState(null);
+
+  const [geminiConfigured, setGeminiConfigured] =
+    useState(null);
+  const [showSettings, setShowSettings] =
+    useState(false);
 
   const [question, setQuestion] = useState("");
   const [answers, setAnswers] = useState([]);
@@ -204,6 +210,41 @@ function App() {
   };
 
   // --------------------------------------------------
+  // Gemini configuration
+  // --------------------------------------------------
+
+  const checkGeminiConfiguration = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/settings/gemini-status`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to check Gemini configuration"
+        );
+      }
+
+      const data = await response.json();
+
+      setGeminiConfigured(
+        Boolean(data.configured)
+      );
+    } catch (err) {
+      console.error(
+        "Failed to check Gemini configuration:",
+        err
+      );
+
+      setGeminiConfigured(false);
+    }
+  };
+
+  useEffect(() => {
+    checkGeminiConfiguration();
+  }, []);
+
+  // --------------------------------------------------
   // Render result
   // --------------------------------------------------
 
@@ -353,6 +394,45 @@ const renderAnswerResult = (answer) => {
 
 
   // --------------------------------------------------
+  // Gemini configuration gate
+  // --------------------------------------------------
+
+  if (geminiConfigured === null) {
+    return (
+      <div className="app">
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          Loading NexaMind...
+        </div>
+      </div>
+    );
+  }
+
+  if (!geminiConfigured || showSettings) {
+    return (
+      <GeminiSetup
+        apiBaseUrl={API_BASE_URL}
+        isSettings={showSettings}
+        onConnected={() => {
+          setGeminiConfigured(true);
+          setShowSettings(false);
+        }}
+        onCancel={
+          geminiConfigured
+            ? () => setShowSettings(false)
+            : undefined
+        }
+      />
+    );
+  }
+
+  // --------------------------------------------------
   // Render
   // --------------------------------------------------
 
@@ -385,7 +465,18 @@ const renderAnswerResult = (answer) => {
 
           <span className="status-dot"></span>
 
-          AI Copilot
+          <span>AI Copilot</span>
+
+          <button
+            type="button"
+            className="settings-button"
+            onClick={() =>
+              setShowSettings(true)
+            }
+            title="AI Connection Settings"
+          >
+            ⚙ Settings
+          </button>
 
         </div>
 

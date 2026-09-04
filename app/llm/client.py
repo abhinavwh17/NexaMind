@@ -2,6 +2,9 @@ import os
 
 from dotenv import load_dotenv
 from google import genai
+from app.services.settings_service import (
+    get_gemini_key,
+)
 
 load_dotenv()
 
@@ -9,7 +12,8 @@ load_dotenv()
 class LLMClient:
 
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = get_gemini_key()
+     
 
         if not api_key:
             raise ValueError(
