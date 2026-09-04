@@ -1177,3 +1177,137 @@
 .result-table td:not(:first-child) {
   text-align: right;
 }
+/* ==================================================
+   Header Settings Button
+   ================================================== */
+
+.settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  margin-left: 14px;
+  padding: 8px 14px;
+
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  border-radius: 10px;
+
+  background: rgba(124, 92, 255, 0.08);
+  color: #6d5dfc;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.settings-button:hover {
+  background: rgba(124, 92, 255, 0.14);
+  border-color: rgba(124, 92, 255, 0.45);
+
+  box-shadow:
+    0 4px 12px rgba(76, 61, 180, 0.12);
+
+  transform: translateY(-1px);
+}
+
+.settings-button:active {
+  transform: translateY(0);
+}
+
+
+/* ==================================================
+   Result Table Header
+   ================================================== */
+
+.result-table-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
+/* ==================================================
+   Export Actions
+   ================================================== */
+
+.result-export-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result-export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 8px 13px;
+
+  border: 1px solid #e1e4ea;
+  border-radius: 9px;
+
+  background: #ffffff;
+  color: #4b5563;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.result-export-button:hover {
+  background: #f7f6ff;
+  color: #6d5dfc;
+
+  border-color: rgba(109, 93, 252, 0.35);
+
+  box-shadow:
+    0 3px 10px rgba(76, 61, 180, 0.1);
+
+  transform: translateY(-1px);
+}
+
+.result-export-button:active {
+  transform: translateY(0);
+}
+
+
+/* ==================================================
+   Responsive
+   ================================================== */
+
+@media (max-width: 700px) {
+  .result-table-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .result-export-actions {
+    width: 100%;
+  }
+
+  .result-export-button {
+    flex: 1;
+  }
+
+  .settings-button {
+    margin-left: 8px;
+    padding: 7px 10px;
+  }
+}
