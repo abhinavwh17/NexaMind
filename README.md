@@ -1,290 +1,138 @@
-## AI-Powered Excel Analysis
-
-## Privacy-First Financial Data Analysis
-
-## How NexaMind Works
-
-## Gemini AI Query Planning
-
-## Local Excel Processing with Pandas
-
-## Supported Financial Calculations
-
-## Example Excel Analysis Questions
-
-## NexaMind Architecture
-
-## Download NexaMind
-
-## Running NexaMind on Windows
-
-## Running NexaMind on macOS
-
 # NexaMind
 
-### Privacy-First Financial Intelligence
+### Privacy-First Financial AI for Excel Analysis
 
-NexaMind is a local-first financial AI copilot that allows users to upload Excel workbooks and ask natural-language questions about their data.
+NexaMind is an open-source financial AI copilot that lets users ask natural-language questions about Excel workbooks while keeping sensitive financial data local.
 
-Unlike traditional AI document-analysis workflows, NexaMind does **not send workbook rows, cell values, or uploaded financial files to the AI model**.
+Instead of sending workbook rows or cell values to an LLM, NexaMind sends only the **user's question and workbook schema** to Gemini. Gemini generates a controlled calculation plan, which is validated and executed locally using Pandas.
 
-Instead, NexaMind sends only the user's question and workbook structure to Gemini. Gemini generates a controlled calculation plan, which is validated and executed locally using Python and Pandas.
-
-> **Your workbook stays on your machine.**
->
-> Gemini helps NexaMind understand *what calculation to perform*.
-> NexaMind performs the actual calculation locally.
-
-[![Latest Release](https://img.shields.io/github/v/release/abhinavwh17/NexaMind?style=flat-square)](https://github.com/abhinavwh17/NexaMind/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/abhinavwh17/NexaMind/total?style=flat-square)](https://github.com/abhinavwh17/NexaMind/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey?style=flat-square)](#running-nexamind)
-[![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat-square)](#technology-stack)
-[![Privacy](https://img.shields.io/badge/Data%20Processing-Local-success?style=flat-square)](#privacy-first-architecture)
-
----
-
-# 📥 Download
-
-The latest desktop builds are available from GitHub Releases:
+> **Your financial data never needs to become the AI's context.**
 
 [**Download Latest NexaMind Release**](https://github.com/abhinavwh17/NexaMind/releases/latest)
 
-Available builds:
+### Built With
+
+`Python` · `FastAPI` · `Pandas` · `React` · `Gemini` · `PyInstaller` · `GitHub Actions`
+
+---
+
+## Why NexaMind?
+
+Many AI-powered data analysis workflows require data to become part of the AI model's context.
+
+NexaMind takes a different approach.
+
+The LLM acts as a **query planner**, while a trusted local calculation engine performs the actual analysis.
 
 ```text
-Windows
-└── NexaMind-Windows.zip
-    └── NexaMind.exe
-
-macOS
-└── NexaMind-macOS.dmg
-    └── NexaMind.app
+User Question
+      │
+      ▼
+Workbook Schema ──────► Gemini
+                         │
+                         ▼
+                  Calculation Plan
+                         │
+                         ▼
+                  Plan Validation
+                         │
+                         ▼
+Workbook Data ─────► Local Pandas Engine
+                         │
+                         ▼
+                       Result
 ```
 
-GitHub Releases are intended for users who want to run NexaMind without setting up Python, Node.js, FastAPI, or the development environment.
+### Sent to Gemini
+
+- User question
+- Sheet names
+- Column names
+- Detected column types
+
+### Not Sent to Gemini
+
+- Workbook file
+- Workbook rows
+- Cell values
+- Financial records
+
+**The AI plans the analysis. NexaMind executes it locally.**
 
 ---
 
-# ✨ Features
+## Key Features
 
-- 📊 Analyse Excel workbooks using natural-language questions
-- 🔒 Local-first financial data processing
-- 🧠 Gemini-powered query planning
-- 🧮 Local calculation engine powered by Pandas
-- 📈 Grouped and multi-dimensional analysis
-- 🔍 Filtering and derived calculations
-- 📋 Dynamic table results
-- 📥 Export results to Excel
-- 📄 Export results to PDF
-- 🔑 Secure local Gemini API key storage
-- 🖥️ Standalone Windows application
-- 🍎 macOS DMG distribution
-- ⚙️ Automated desktop builds with GitHub Actions
+### Natural-Language Excel Analysis
 
----
+Ask questions about financial workbooks using natural language instead of manually creating formulas or writing code.
 
-# 🔐 Privacy-First Architecture
-
-Financial data can be highly sensitive.
-
-NexaMind is designed so that the AI model does not need access to the contents of the uploaded workbook.
-
-When a workbook is uploaded:
-
-1. The workbook is loaded locally.
-2. NexaMind determines its sheets, columns, and column types.
-3. Only this schema metadata and the user's question are sent to Gemini.
-4. Gemini returns a structured calculation plan.
-5. NexaMind validates the plan.
-6. The calculation is executed locally against the workbook using Pandas.
-7. The result is displayed in the NexaMind interface.
-
-The actual workbook is never uploaded to Gemini by NexaMind.
-
-## What Leaves Your Device?
-
-| Information | Sent to Gemini? |
-|---|:---:|
-| Excel workbook | ❌ No |
-| Workbook file | ❌ No |
-| Financial rows | ❌ No |
-| Cell values | ❌ No |
-| Calculated intermediate datasets | ❌ No |
-| Calculation results | ❌ No |
-| User question | ✅ Yes |
-| Sheet names | ✅ Yes |
-| Column names | ✅ Yes |
-| Detected column types | ✅ Yes |
-
-This distinction is important: NexaMind is **local-first**, but Gemini is still an external service used for query planning.
-
----
-
-# 🏗️ Architecture
+Examples:
 
 ```text
-                         ┌─────────────────────┐
-                         │        User         │
-                         │                     │
-                         │ "Total profit by    │
-                         │  customer?"         │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │    React Frontend   │
-                         │                     │
-                         │    NexaMind UI      │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │      FastAPI        │
-                         │                     │
-                         │   Local Backend     │
-                         └──────────┬──────────┘
-                                    │
-                       ┌────────────┴────────────┐
-                       │                         │
-                       ▼                         ▼
-              ┌─────────────────┐       ┌─────────────────┐
-              │ Excel Workbook  │       │ Workbook Schema │
-              │                 │       │                 │
-              │ Local Only      │       │ Sheets          │
-              │ Pandas/OpenPyXL │       │ Columns         │
-              └────────┬────────┘       │ Types           │
-                       │                └────────┬────────┘
-                       │                         │
-                       │                         ▼
-                       │                ┌─────────────────┐
-                       │                │     Gemini      │
-                       │                │  Query Planner  │
-                       │                │                 │
-                       │                │ Question +      │
-                       │                │ Schema Only     │
-                       │                └────────┬────────┘
-                       │                         │
-                       │                         ▼
-                       │                ┌─────────────────┐
-                       │                │ Structured JSON │
-                       │                │ Calculation Plan│
-                       │                └────────┬────────┘
-                       │                         │
-                       │                         ▼
-                       │                ┌─────────────────┐
-                       │                │ Plan Validation │
-                       │                │                 │
-                       │                │ Local           │
-                       │                └────────┬────────┘
-                       │                         │
-                       └────────────┬────────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │ Local Calculation   │
-                         │ Engine              │
-                         │                     │
-                         │ Pandas              │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │ NexaMind Result     │
-                         │                     │
-                         │ Answer / Table      │
-                         │ Excel / PDF Export  │
-                         └─────────────────────┘
+What is the total revenue?
+
+Show total profit by region.
+
+Which customer generated the highest revenue?
+
+Compare issued quantity and produced quantity by customer.
+
+What is the average profit by product?
+
+Show revenue grouped by region and customer.
 ```
 
 ---
 
-# 🧠 How NexaMind Uses AI
+### Privacy-First Architecture
 
-NexaMind does not ask Gemini to calculate directly from financial workbook data.
+Workbook contents are processed locally.
 
-Gemini acts as a **query planner**.
+The Gemini API receives only the information required to understand the structure of the workbook and generate a calculation plan.
 
-For example, imagine the workbook contains:
+This separates:
 
 ```text
-Sheet: Production
-
-Columns:
-Party
-VARIETY
-QUANTITY OF RM
-Prod. Qty
+AI Reasoning
+     │
+     ▼
+Calculation Planning
 ```
 
-NexaMind can send schema information similar to:
+from:
+
+```text
+Sensitive Data
+     │
+     ▼
+Local Calculation
+```
+
+---
+
+### Controlled AI Execution
+
+NexaMind does **not** ask the LLM to generate arbitrary Python code that is then executed.
+
+Instead, Gemini produces a structured calculation plan using operations supported by the NexaMind calculation engine.
+
+For example:
 
 ```json
 {
-  "sheets": {
-    "Production": {
-      "columns": [
-        {
-          "name": "Party",
-          "type": "string"
-        },
-        {
-          "name": "VARIETY",
-          "type": "string"
-        },
-        {
-          "name": "QUANTITY OF RM",
-          "type": "number"
-        },
-        {
-          "name": "Prod. Qty",
-          "type": "number"
-        }
-      ]
-    }
-  }
-}
-```
-
-No workbook rows are included.
-
-If the user asks:
-
-```text
-Show barley issued, production quantity and balance
-by customer and variety.
-```
-
-Gemini can produce a controlled plan such as:
-
-```json
-{
+  "version": "1.0",
   "calculations": [
     {
-      "id": "calc_1",
+      "id": "profit_by_region",
       "operation": "GROUP_BY_METRICS",
-      "sheet": "Production",
-      "group_by": [
-        "Party",
-        "VARIETY"
-      ],
+      "sheet": "Sales",
+      "group_by": ["Region"],
       "metrics": [
         {
-          "column": "QUANTITY OF RM",
+          "column": "Profit",
           "aggregation": "SUM",
-          "alias": "Barley Issued"
-        },
-        {
-          "column": "Prod. Qty",
-          "aggregation": "SUM",
-          "alias": "Production Qty"
-        }
-      ],
-      "derived": [
-        {
-          "name": "Balance Qty",
-          "operation": "SUBTRACT",
-          "left": "Barley Issued",
-          "right": "Production Qty"
+          "alias": "Total Profit"
         }
       ]
     }
@@ -292,59 +140,165 @@ Gemini can produce a controlled plan such as:
 }
 ```
 
-Gemini does **not execute this plan against the workbook**.
-
-NexaMind validates the plan and performs the calculation locally.
+The backend validates the plan before executing it against the local workbook.
 
 ---
 
-# 🔄 Query Processing Flow
+## AI-Powered Excel Analysis
+
+NexaMind uses Gemini to understand the user's analytical intent.
+
+Suppose a workbook contains:
 
 ```text
-User Question
-      ↓
-Workbook Schema
-      ↓
-Gemini Query Planner
-      ↓
-Structured Calculation Plan
-      ↓
-Plan Validation
-      ↓
-Local Pandas Execution
-      ↓
-Calculated Result
-      ↓
-NexaMind UI
+Sheet: Sales
+
+Columns:
+Region        string
+Customer      string
+Revenue       number
+Cost          number
+Profit        number
+Date          datetime
 ```
 
-This separation between **AI planning** and **local execution** is one of the core architectural principles of NexaMind.
+The user can ask:
+
+```text
+Show total profit by region.
+```
+
+Gemini receives the question and schema — **not the rows containing actual revenue or profit values**.
+
+It generates a calculation plan describing the operation NexaMind should perform.
+
+The local Pandas calculation engine then executes that plan.
 
 ---
 
-# 🛡️ Security Design
+## How NexaMind Works
 
-NexaMind intentionally avoids executing arbitrary AI-generated code.
+### 1. Upload an Excel Workbook
 
-The AI produces a restricted JSON calculation plan rather than Python, JavaScript, SQL, or shell commands.
+The workbook is loaded and processed locally.
 
-The backend validates the requested operations before executing them.
+Supported formats:
 
-NexaMind does **not** rely on:
+```text
+.xlsx
+.xls
+```
 
-- `eval()`
-- arbitrary AI-generated Python
-- arbitrary shell commands
-- AI-generated code execution
-- workbook mutation commands
+### 2. Extract Workbook Schema
 
-The calculation engine works against local Pandas DataFrames and is designed around explicitly supported read-only operations.
+NexaMind identifies metadata such as:
+
+```text
+Sheet names
+Column names
+Detected data types
+```
+
+### 3. Ask a Question
+
+For example:
+
+```text
+What is total profit by region?
+```
+
+### 4. Generate a Calculation Plan
+
+The question and workbook schema are sent to Gemini.
+
+Gemini converts the request into a structured calculation plan.
+
+### 5. Validate the Plan
+
+NexaMind checks the generated plan before execution.
+
+Only supported operations can be executed by the calculation engine.
+
+### 6. Execute Locally
+
+Pandas performs the calculation against the workbook data on the user's machine.
+
+### 7. Present the Result
+
+Results can be displayed as:
+
+- Scalar values
+- Grouped results
+- Multi-column grouped tables
+- Multi-metric tables
+
+Table results can also be exported to Excel or PDF.
 
 ---
 
-# 🧮 Calculation Engine
+## Gemini AI Query Planning
 
-NexaMind currently supports operations including:
+Gemini is used as a **planner**, not as the financial calculation engine.
+
+Conceptually:
+
+```text
+Question
+   +
+Workbook Schema
+   │
+   ▼
+Gemini
+   │
+   ▼
+Structured Calculation Plan
+```
+
+Gemini does not need access to the underlying workbook records to determine that a question such as:
+
+```text
+What is total profit by region?
+```
+
+requires something conceptually equivalent to:
+
+```text
+GROUP BY Region
+SUM Profit
+```
+
+The actual aggregation is performed locally.
+
+---
+
+## Local Excel Processing with Pandas
+
+The calculation engine operates on local Pandas DataFrames.
+
+Conceptually:
+
+```text
+Excel Workbook
+      │
+      ▼
+Local DataFrame
+      │
+Calculation Plan
+      │
+      ▼
+Validated Executor
+      │
+      ▼
+Local Result
+```
+
+This architecture keeps data processing separate from LLM reasoning.
+
+---
+
+## Supported Financial Calculations
+
+NexaMind's calculation engine supports operations including:
 
 ```text
 SUM
@@ -356,68 +310,18 @@ COUNT_DISTINCT
 MEDIAN
 STDDEV
 VARIANCE
+
 GROUP_BY
 GROUP_BY_METRICS
+
 DISTINCT_VALUES
 FIRST
 LAST
 ```
 
-## Grouped Analysis
+### Derived Calculations
 
-NexaMind supports both single and multi-dimensional grouping.
-
-Example:
-
-```json
-{
-  "operation": "GROUP_BY_METRICS",
-  "group_by": [
-    "Party",
-    "VARIETY"
-  ]
-}
-```
-
-This allows questions such as:
-
-```text
-Show production by customer and variety.
-```
-
----
-
-# 🔎 Filters
-
-The local calculation engine supports controlled filtering operations including:
-
-```text
-=
-!=
->
->=
-<
-<=
-IN
-NOT_IN
-CONTAINS
-NOT_CONTAINS
-BETWEEN
-IS_NULL
-IS_NOT_NULL
-LAST_MONTH
-THIS_MONTH
-```
-
-Filtering is performed locally against workbook data.
-
----
-
-# ➗ Derived Calculations
-
-NexaMind can calculate derived metrics from locally calculated values.
-
-Supported operations include:
+Supported derived operations include:
 
 ```text
 ADD
@@ -427,229 +331,340 @@ DIVIDE
 PERCENTAGE
 ```
 
-Example:
+### Filtering
+
+Supported filtering includes operations such as:
 
 ```text
-Barley Issued
--
-Production Quantity
 =
-Balance Quantity
+!=
+>
+>=
+<
+<=
+
+IN
+CONTAINS
+BETWEEN
+
+IS NULL
+IS NOT NULL
+
+LAST_MONTH
+THIS_MONTH
 ```
 
 ---
 
-# 📊 Result Presentation
+## Multi-Metric Analysis
 
-Depending on the question, NexaMind can return natural-language answers or structured tables.
+NexaMind can perform multiple aggregations in a single grouped calculation.
 
-## Natural-Language Result
+Example question:
 
 ```text
-The total profit is 16,893,702.26.
+Show issued quantity and produced quantity by customer and variety.
 ```
 
-## Table Result
+Example plan:
 
-Grouped and multi-dimensional calculations are displayed as dynamic tables.
+```json
+{
+  "operation": "GROUP_BY_METRICS",
+  "sheet": "Production",
+  "group_by": [
+    "Customer",
+    "Variety"
+  ],
+  "metrics": [
+    {
+      "column": "Issued Qty",
+      "aggregation": "SUM",
+      "alias": "Issued"
+    },
+    {
+      "column": "Produced Qty",
+      "aggregation": "SUM",
+      "alias": "Produced"
+    }
+  ]
+}
+```
 
-Example:
-
-| Party | Variety | Barley Issued | Production Qty | Balance Qty |
-|---|---|---:|---:|---:|
-| Customer A | 6 ROW | 1,625 | 1,300 | 325 |
-| Customer B | 2 ROW | 2,100 | 1,850 | 250 |
+This allows NexaMind to return structured analytical tables rather than only scalar answers.
 
 ---
 
-# 📥 Exporting Results
+## Example Excel Analysis Questions
 
-NexaMind supports client-side result exports.
-
-## Excel
-
-Tabular results can be exported as:
+Try questions such as:
 
 ```text
-.xlsx
+What is the total revenue?
+
+What is total profit by region?
+
+Which customer generated the highest revenue?
+
+Show monthly revenue totals.
+
+Calculate average profit by product.
+
+Compare revenue and cost by region.
+
+Show the top customers by revenue.
+
+What is the median order value?
+
+How many unique customers are there?
+
+Show issued and produced quantities by customer and variety.
 ```
-
-## PDF
-
-Tabular results can also be exported as PDF reports.
-
-The export is generated from the already calculated result shown in the application.
-
-The original workbook does not need to be uploaded to an external export service.
 
 ---
 
-# 🔑 Gemini API Key
+## Security Model
 
-NexaMind does **not** ship with an embedded Gemini API key.
+NexaMind treats LLM output as **untrusted input**.
+
+The model does not receive permission to execute arbitrary operations against workbook data.
+
+The security boundary is:
+
+```text
+                UNTRUSTED
+
+                  Gemini
+                    │
+                    ▼
+             Calculation Plan
+                    │
+              ┌─────▼─────┐
+              │ Validator │
+              └─────┬─────┘
+                    │
+                TRUSTED
+                    │
+                    ▼
+            Local Calculation
+                    │
+                    ▼
+                 Workbook
+```
+
+NexaMind does not rely on arbitrary LLM-generated Python execution.
+
+Operations outside the supported calculation language are rejected.
+
+Mutation-style operations such as the following are not part of the supported analysis boundary:
+
+```text
+DELETE
+DROP
+UPDATE
+INSERT
+OVERWRITE
+RENAME
+REPLACE
+CLEAR
+REMOVE
+APPEND
+WRITE
+SAVE
+TRUNCATE
+```
+
+---
+
+## Gemini API Key Security
+
+NexaMind does not ship with a shared Gemini API key.
 
 Each user provides their own Gemini API key.
 
-On first launch, NexaMind displays:
+The key is stored locally using Python's `keyring` integration with the operating system's credential storage.
+
+Depending on the operating system, this typically means:
 
 ```text
-Connect Gemini
-```
-
-The key is stored using the operating system credential store through Python `keyring`.
-
-Depending on the operating system, this uses facilities such as:
-
-```text
-Windows → Windows Credential Manager
+Windows → Credential Manager
 macOS   → Keychain
-Linux   → supported system keyring backend
+Linux   → Secret Service / compatible keyring
 ```
 
-The application exposes only whether Gemini is configured.
+The key is not intended to be stored in browser local storage or embedded in the desktop build.
 
-The stored API key itself is not returned to the React frontend.
+The application provides settings for configuring or replacing the Gemini connection.
 
-Users can update their Gemini connection later using:
+---
+
+## Data Privacy Summary
+
+| Data | Sent to Gemini? |
+|---|---|
+| User question | Yes |
+| Sheet names | Yes |
+| Column names | Yes |
+| Detected column types | Yes |
+| Excel workbook | **No** |
+| Workbook rows | **No** |
+| Cell values | **No** |
+| Financial records | **No** |
+| Local calculation results | **No** |
+
+This distinction is important:
+
+**NexaMind is not an offline LLM.**
+
+Gemini is an external AI service and receives the question and workbook schema.
+
+The sensitive workbook contents and locally calculated results remain outside the LLM request.
+
+---
+
+## Result Presentation
+
+Depending on the calculation, NexaMind can present:
+
+### Scalar Results
 
 ```text
-⚙ Settings
+Total Revenue
+
+₹4,520,000
+```
+
+### Grouped Results
+
+```text
+Region       Total Profit
+--------------------------
+North        450,000
+South        375,000
+East         290,000
+West         410,000
+```
+
+### Multi-Metric Results
+
+```text
+Customer     Issued     Produced
+--------------------------------
+Customer A   12,500     11,900
+Customer B    8,700      8,450
 ```
 
 ---
 
-# 🚀 Running NexaMind
+## Export Results
 
-NexaMind can be run as a standalone desktop application.
+Structured table results can be exported from the application.
 
-Python and Node.js are **not required** when using a packaged release.
+Supported export formats include:
+
+```text
+Excel (.xlsx)
+PDF (.pdf)
+```
+
+This makes calculated results easier to share or use in subsequent workflows without modifying the source workbook.
 
 ---
 
-## 🪟 Windows
+## Download NexaMind
 
-Download the latest release:
+The latest published version is available from GitHub Releases:
 
-[**Download NexaMind for Windows**](https://github.com/abhinavwh17/NexaMind/releases/latest)
+[**Download Latest NexaMind Release**](https://github.com/abhinavwh17/NexaMind/releases/latest)
 
-Download:
+Desktop builds are intended for:
 
 ```text
-NexaMind-Windows.zip
+Windows
+macOS
 ```
 
-Extract the ZIP and run:
+The goal of the desktop distribution is:
+
+```text
+Download
+   ↓
+Install / Extract
+   ↓
+Launch NexaMind
+   ↓
+Local backend starts
+   ↓
+Browser opens
+   ↓
+Configure Gemini
+   ↓
+Analyze workbook
+```
+
+End users should not need to install Python, Node.js, React or FastAPI separately when using packaged releases.
+
+---
+
+## Running NexaMind on Windows
+
+Download the Windows package from:
+
+[**NexaMind Releases**](https://github.com/abhinavwh17/NexaMind/releases/latest)
+
+Extract the package and launch:
 
 ```text
 NexaMind.exe
 ```
 
-NexaMind will automatically:
+NexaMind starts its local backend and opens the application in the browser.
 
-```text
-Start local FastAPI server
-          ↓
-http://127.0.0.1:8000
-          ↓
-Open Google Chrome
-          ↓
-Display NexaMind
-```
-
-If Google Chrome is unavailable, NexaMind can fall back to the system default browser.
+Unsigned development builds may trigger Windows SmartScreen warnings.
 
 ---
 
-## 🍎 macOS
+## Running NexaMind on macOS
 
-Download the latest release:
+Download the macOS package from:
 
-[**Download NexaMind for macOS**](https://github.com/abhinavwh17/NexaMind/releases/latest)
+[**NexaMind Releases**](https://github.com/abhinavwh17/NexaMind/releases/latest)
 
-Download:
-
-```text
-NexaMind-macOS.dmg
-```
-
-Open the DMG and drag:
+Install the application and launch:
 
 ```text
 NexaMind.app
 ```
 
-into:
+### Important
+
+Current development builds may not yet be signed and notarized with an Apple Developer certificate.
+
+macOS Gatekeeper may therefore warn about downloaded builds.
+
+Production-quality public macOS distribution should eventually use:
 
 ```text
-Applications
+Build
+  ↓
+Developer ID Signing
+  ↓
+Create DMG
+  ↓
+Sign DMG
+  ↓
+Apple Notarization
+  ↓
+Staple
+  ↓
+Release
 ```
-
-Then launch NexaMind.
-
-NexaMind starts its local backend and opens the application in Google Chrome.
-
-> **Development build notice**
->
-> The current macOS distribution is not yet Apple notarized.
-> Depending on system security settings, macOS Gatekeeper may display
-> a warning when launching a downloaded build.
->
-> Apple code signing and notarization are planned for the distribution workflow.
 
 ---
 
-# 🧪 Testing NexaMind
+## Development Setup
 
-After launching NexaMind:
-
-1. Configure your Gemini API key if this is your first launch.
-2. Upload an Excel workbook.
-3. Wait for NexaMind to prepare the dataset.
-4. Enter a question about the workbook.
-5. Review the calculated result.
-6. Export tabular results to Excel or PDF when required.
-
-Currently supported upload formats:
-
-```text
-.xlsx
-.xls
-```
-
-Example questions:
-
-```text
-What is the total profit?
-```
-
-```text
-Which customer has the highest production quantity?
-```
-
-```text
-Show total production by customer.
-```
-
-```text
-Show production quantity by customer and variety.
-```
-
-```text
-Compare issued quantity and production quantity by customer.
-```
-
-```text
-What is the balance quantity after subtracting production
-from issued quantity?
-```
-
-The questions available depend on the structure and columns in the uploaded workbook.
-
----
-
-# 💻 Development Setup
-
-## Requirements
+### Requirements
 
 For local development:
 
@@ -668,21 +683,23 @@ cd NexaMind
 
 ---
 
-## Backend Setup
+### Backend Setup
 
-Create a Python virtual environment:
+Create a virtual environment:
 
 ```bash
 python3 -m venv .venv
 ```
 
-Activate it on macOS/Linux:
+Activate it.
+
+macOS/Linux:
 
 ```bash
 source .venv/bin/activate
 ```
 
-On Windows:
+Windows:
 
 ```powershell
 .venv\Scripts\activate
@@ -691,10 +708,10 @@ On Windows:
 Install dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
-Start FastAPI:
+Start the backend:
 
 ```bash
 uvicorn app.main:app --reload
@@ -706,11 +723,17 @@ Backend:
 http://127.0.0.1:8000
 ```
 
+FastAPI documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
 ---
 
-## Frontend Setup
+## Frontend Development
 
-Open another terminal:
+Navigate to:
 
 ```bash
 cd frontend
@@ -722,207 +745,125 @@ Install dependencies:
 npm install
 ```
 
-Start the Vite development server:
+Start Vite:
 
 ```bash
 npm run dev
 ```
 
-Frontend:
+Frontend development server:
 
 ```text
 http://localhost:5173
 ```
 
-During development:
-
-```text
-React / Vite
-http://localhost:5173
-
-        ↓
-
-FastAPI
-http://127.0.0.1:8000
-```
-
----
-
-# 📦 Building the Frontend
-
-Create the production React build:
+For production:
 
 ```bash
-cd frontend
 npm run build
 ```
 
-Vite generates:
+The production frontend is generated under:
 
 ```text
-frontend/dist/
-```
-
-The production FastAPI application serves this directory directly.
-
-Production therefore uses:
-
-```text
-Browser
-   ↓
-http://127.0.0.1:8000
-   ↓
-FastAPI
-   ├── API
-   └── React frontend
+frontend/dist
 ```
 
 ---
 
-# 🖥️ Building the Desktop Application
+## Desktop Packaging
 
-NexaMind uses PyInstaller to package the Python backend, application launcher, dependencies, and production frontend.
+NexaMind uses PyInstaller to package the Python backend and production frontend.
 
-From the project root:
+Build the frontend first:
+
+```bash
+cd frontend
+npm ci
+npm run build
+cd ..
+```
+
+Then build NexaMind:
 
 ```bash
 pyinstaller --clean NexaMind.spec
 ```
 
-The resulting desktop executable is created under:
+The generated application is placed under:
 
 ```text
 dist/
 ```
 
-The desktop launcher:
+The packaged application:
 
-```text
-launcher.py
-```
-
-is responsible for:
-
-```text
-Launch NexaMind
-      ↓
-Start FastAPI
-      ↓
-Serve bundled React application
-      ↓
-Open Chrome
-```
+1. Starts FastAPI locally.
+2. Serves the production React frontend.
+3. Opens NexaMind in the user's browser.
 
 ---
 
-# ⚙️ GitHub Actions
+## GitHub Actions
 
-NexaMind uses GitHub Actions to build desktop applications automatically.
+NexaMind uses GitHub Actions for desktop build automation.
 
-The CI pipeline performs:
+The desktop pipeline builds platform-specific distributions for:
 
 ```text
-Checkout source
-      ↓
-Install Node.js
-      ↓
-npm ci
-      ↓
-Build React
-      ↓
-Install Python
-      ↓
-Install backend dependencies
-      ↓
-PyInstaller
-      ↓
-Package desktop application
-      ↓
-Upload build artifact
+Windows
+macOS
 ```
 
-Platform-specific GitHub runners are used because PyInstaller builds applications for the operating system on which it runs.
-
-## Windows Build
+The pipeline handles tasks such as:
 
 ```text
-windows-latest
-      ↓
-NexaMind.exe
-      ↓
+Frontend dependency installation
+React production build
+Python environment setup
+PyInstaller packaging
+Windows artifact generation
+macOS application packaging
+DMG generation
+Artifact upload
+```
+
+Workflow artifacts are intended primarily for CI/testing.
+
+Published software should be distributed through **GitHub Releases**.
+
+---
+
+## GitHub Releases
+
+Public versions of NexaMind are distributed through:
+
+[**GitHub Releases**](https://github.com/abhinavwh17/NexaMind/releases)
+
+Recommended release naming:
+
+```text
+v1.0.0
+v1.1.0
+v1.2.0
+```
+
+Release assets can include:
+
+```text
 NexaMind-Windows.zip
-```
-
-## macOS Build
-
-```text
-macos-latest
-      ↓
-NexaMind
-      ↓
-NexaMind.app
-      ↓
 NexaMind-macOS.dmg
 ```
 
-No Gemini API key is embedded into the generated application.
-
----
-
-# 🏷️ GitHub Releases
-
-NexaMind uses GitHub Releases as the public distribution channel for packaged desktop builds.
-
-A release can contain:
-
-```text
-Release v1.0.0
-
-Assets
-├── NexaMind-Windows.zip
-└── NexaMind-macOS.dmg
-```
-
-Users can always access the newest version from:
+The permanent latest-release URL is:
 
 ```text
 https://github.com/abhinavwh17/NexaMind/releases/latest
 ```
 
-## Recommended Release Workflow
-
-```text
-Development
-     ↓
-Merge into main
-     ↓
-Create version tag
-     ↓
-v1.0.0
-     ↓
-GitHub Actions
-     ↓
-Build Windows + macOS
-     ↓
-Create GitHub Release
-     ↓
-Attach ZIP + DMG
-     ↓
-Users download from Releases
-```
-
-Example version tag:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The release pipeline can then create a GitHub Release and attach both desktop packages automatically.
-
 ---
 
-# 📁 Project Structure
+## Project Structure
 
 ```text
 NexaMind/
@@ -932,25 +873,17 @@ NexaMind/
 │   │   └── routes/
 │   │
 │   ├── llm/
-│   │   └── client.py
 │   │
-│   ├── services/
-│   │   ├── calculation_service.py
-│   │   ├── dataset_service.py
-│   │   ├── excel_service.py
-│   │   ├── query_planner.py
-│   │   └── settings_service.py
-│   │
-│   └── main.py
+│   └── services/
+│       ├── calculation_service.py
+│       ├── dataset_service.py
+│       ├── excel_service.py
+│       ├── query_planner.py
+│       └── settings_service.py
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── App.jsx
-│   │   └── App.css
-│   │
-│   ├── package.json
-│   └── package-lock.json
+│   └── dist/
 │
 ├── tests/
 │
@@ -965,174 +898,194 @@ NexaMind/
 
 ---
 
-# 🧰 Technology Stack
+## Technology Stack
 
-## Frontend
+### Frontend
 
-- React
-- Vite
-- JavaScript
-- SheetJS (`xlsx`)
-- jsPDF
-- jsPDF-AutoTable
+```text
+React
+Vite
+JavaScript
+HTML
+CSS
+SheetJS
+jsPDF
+```
 
-## Backend
+### Backend
 
-- Python
-- FastAPI
-- Pandas
-- OpenPyXL
+```text
+Python
+FastAPI
+Pandas
+Uvicorn
+```
 
-## AI
+### AI
 
-- Google Gemini
-- Structured JSON calculation planning
+```text
+Google Gemini
+Structured calculation planning
+Schema-aware prompting
+```
 
-## Security
+### Desktop
 
-- Python `keyring`
-- OS-native credential storage
-- Controlled calculation DSL
-- Plan validation
-- Local workbook processing
+```text
+PyInstaller
+Windows executable packaging
+macOS application / DMG packaging
+```
 
-## Desktop Distribution
+### Security
 
-- PyInstaller
-- GitHub Actions
-- Windows executable packaging
-- macOS application packaging
-- DMG generation
+```text
+OS credential storage
+Plan validation
+Controlled calculation operations
+Local workbook execution
+```
+
+### DevOps
+
+```text
+GitHub
+GitHub Actions
+Automated desktop builds
+Release artifacts
+```
 
 ---
 
-# 🎯 Design Philosophy
+## Design Philosophy
 
-NexaMind separates:
+NexaMind is intentionally focused.
 
-```text
-AI reasoning about the question
-```
+It is not designed to be a general-purpose chatbot.
 
-from:
+Its architecture is based on a simple principle:
 
-```text
-execution against sensitive financial data
-```
+> **Use AI for reasoning. Use deterministic software for execution.**
 
-A traditional AI analysis workflow may look like:
+For financial analysis this provides a clearer separation between:
 
 ```text
-Workbook
-   ↓
-AI Provider
-   ↓
-Analysis
+Natural-language understanding
+            │
+            ▼
+       AI planning
+            │
+            ▼
+    Validated operation
+            │
+            ▼
+Deterministic local calculation
 ```
 
-NexaMind instead uses:
-
-```text
-              Question + Schema
-                     │
-                     ▼
-                 AI Planner
-                     │
-                     ▼
-             Calculation Plan
-                     │
-                     ▼
-
-Workbook ─────► Local Calculation Engine
-                     │
-                     ▼
-                   Result
-```
-
-This allows AI to interpret natural-language questions without requiring the AI model to directly access the underlying workbook records.
+This also makes the system easier to validate, test and extend than executing arbitrary AI-generated code.
 
 ---
 
-# 🔒 Core Privacy Principle
-
-```text
-AI decides WHAT calculation is required.
-
-NexaMind decides HOW it is safely executed.
-
-Your workbook data stays local.
-```
-
-The workbook itself is never intentionally included in the Gemini request.
-
-The external AI service receives only the information required to understand the workbook structure and generate a calculation plan.
-
----
-
-# ⚠️ Current Limitations
+## Current Limitations
 
 NexaMind is under active development.
 
-Current limitations include:
+Current limitations may include:
 
-- Excel-focused workbook analysis
-- `.xlsx` and `.xls` input support
-- Gemini is currently the supported AI planning provider
-- Analysis is limited to operations supported by NexaMind's calculation DSL
-- Complex or irregular workbook layouts may require additional normalization
-- macOS releases are not yet Apple notarized
-- The local backend remains active while NexaMind is running
-- Multi-file analytical relationships are still evolving
-- Some advanced date semantics require further refinement
+- Excel-focused input
+- Calculation language supports a defined set of operations
+- Complex spreadsheet formulas may require additional operations
+- Relative date calculations depend on application/server date behavior
+- Desktop builds may not yet be code-signed
+- macOS builds may not yet be Apple notarized
+- Gemini requires an internet connection
+- Gemini requires the user to provide an API key
 
-NexaMind should currently be considered a development and portfolio project rather than a production financial decision-making system.
+These constraints are intentional where they help maintain a controlled execution boundary.
 
 ---
 
-# 🗺️ Roadmap
+## Roadmap
 
 Planned improvements include:
 
-- Expanded financial calculation operations
-- Improved workbook structure detection
-- More advanced date-based analysis
-- Multi-workbook analysis
-- Formula-aware financial analysis
-- Charts and visual analytics
-- Improved desktop application lifecycle management
-- Single-instance desktop handling
-- Signed Windows builds
-- Apple Developer ID signing
-- Apple notarization
-- Automated GitHub Releases
-- Improved automated testing
-- Additional privacy and security controls
-- Optional support for additional LLM providers
+- Expanded automated calculation tests
+- Security-boundary tests
+- Calculation DSL documentation
+- Privacy inspection screen
+- Sample financial workbook
+- Example question library
+- Improved desktop installation
+- Signed Windows releases
+- Signed and notarized macOS releases
+- Automated tagged GitHub Releases
+- Additional financial calculations
+- Improved date handling
+- Architecture documentation
+- Threat-model documentation
+
+A future local-LLM mode may allow NexaMind to run with providers such as Ollama, enabling a fully local AI planning option.
 
 ---
 
-# 🤝 Contributing
+## Security Testing
 
-Contributions, ideas, and technical feedback are welcome.
+A major goal of NexaMind is to make the AI execution boundary testable.
 
-When contributing, please preserve NexaMind's core architectural principle:
+Security-oriented tests should verify behavior such as:
 
-> **Sensitive workbook data should remain local whenever possible, and AI-generated instructions must be validated before execution.**
+```text
+Unsupported operation        → rejected
+Unknown sheet                → rejected
+Unknown column               → rejected
+Malformed calculation plan   → rejected
+Unexpected Python code       → rejected
+Unexpected SQL               → rejected
+Mutation request             → rejected
+Invalid filter               → rejected
+Division by zero             → safely handled
+```
+
+This ensures that an incorrect or malicious LLM response cannot automatically become arbitrary workbook execution.
 
 ---
 
-# 📄 Disclaimer
+## Contributing
 
-NexaMind is an experimental financial data analysis tool.
+NexaMind is an evolving portfolio and open-source project.
 
-Results should be independently verified before being used for financial, accounting, regulatory, investment, or other high-impact decisions.
+Issues, suggestions and pull requests are welcome.
 
-Users are responsible for reviewing the privacy policies and terms applicable to any external AI service they configure with NexaMind.
+When contributing, please keep the project's core principles in mind:
+
+1. Sensitive workbook data should remain local.
+2. LLM output must be treated as untrusted input.
+3. Calculations should execute through controlled operations.
+4. New capabilities should preserve the privacy boundary.
+5. README claims should reflect implemented functionality.
 
 ---
 
-# NexaMind
+## Disclaimer
 
-### Financial Intelligence, with your data staying under your control.
+NexaMind is a software engineering and financial data analysis project.
 
-**Local data. AI-assisted planning. Controlled execution.**
+It does not provide financial, investment, tax or legal advice.
+
+Users are responsible for validating calculations and outputs before using them for business or financial decisions.
+
+---
+
+## Author
+
+**Abhinav Wahi**
+
+Technical Lead · Mobile & Full-Stack Engineer · Applied AI Engineering
+
+GitHub: [@abhinavwh17](https://github.com/abhinavwh17)
+
+---
+
+## License
+
+See the repository's `LICENSE` file for licensing information.
