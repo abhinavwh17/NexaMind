@@ -1,3 +1,25 @@
+## AI-Powered Excel Analysis
+
+## Privacy-First Financial Data Analysis
+
+## How NexaMind Works
+
+## Gemini AI Query Planning
+
+## Local Excel Processing with Pandas
+
+## Supported Financial Calculations
+
+## Example Excel Analysis Questions
+
+## NexaMind Architecture
+
+## Download NexaMind
+
+## Running NexaMind on Windows
+
+## Running NexaMind on macOS
+
 # NexaMind
 
 ### Privacy-First Financial Intelligence
