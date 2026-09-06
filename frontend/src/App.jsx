@@ -5,284 +5,244 @@ import autoTable from "jspdf-autotable";
 import "./App.css";
 import GeminiSetup from "./components/GeminiSetup";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = import.meta.env.DEV
+  ? "http://127.0.0.1:8000"
+  : window.location.origin;
+
+
+const SettingsIcon = () => (
+  <svg
+    className="ui-icon"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.9"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06L3.4 16.74l.06-.06A1.7 1.7 0 0 0 3.8 14.8a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2V9.4h.1a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.26 3.2l.06.06A1.7 1.7 0 0 0 8.2 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2h4v.1a1.7 1.7 0 0 0 .4 1.1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 19.4 8.2a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.6 1Z" />
+  </svg>
+);
+
+const ExcelIcon = () => (
+  <svg
+    className="export-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor" />
+    <path d="M8 8.2h2.2l1.8 2.7 1.8-2.7H16l-2.8 3.9 3 4.2H14l-2-3-2 3H7.8l3-4.2L8 8.2Z" fill="white" />
+  </svg>
+);
+
+const PdfIcon = () => (
+  <svg
+    className="export-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <path d="M6 2.8h8.2L19 7.6V21H6V2.8Z" fill="currentColor" />
+    <path d="M14 2.8v5h5" fill="none" stroke="white" strokeWidth="1.4" strokeLinejoin="round" />
+    <path d="M8.2 15.8v-4.4h1.5c1 0 1.7.5 1.7 1.4 0 .9-.7 1.4-1.7 1.4H9.2v1.6h-1Zm1-2.4h.4c.5 0 .8-.2.8-.6s-.3-.6-.8-.6h-.4v1.2Zm3 2.4v-4.4h1.4c1.4 0 2.3.8 2.3 2.2s-.9 2.2-2.3 2.2h-1.4Zm1-.8h.4c.8 0 1.3-.5 1.3-1.4s-.5-1.4-1.3-1.4h-.4V15Zm3.4.8v-4.4h2.8v.8h-1.8v1h1.6v.8h-1.6v1.8h-1Z" fill="white" />
+  </svg>
+);
 
 function App() {
   const fileInputRef = useRef(null);
-
+  const [conversations, setConversations] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
+  const [conversationTitle, setConversationTitle] = useState("New analysis");
   const [files, setFiles] = useState([]);
   const [datasetId, setDatasetId] = useState(null);
-
-  const [geminiConfigured, setGeminiConfigured] =
-    useState(null);
-  const [showSettings, setShowSettings] =
-    useState(false);
-
-  const [question, setQuestion] = useState("");
   const [answers, setAnswers] = useState([]);
-
+  const [question, setQuestion] = useState("");
+  const [geminiConfigured, setGeminiConfigured] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [asking, setAsking] = useState(false);
-
+  const [loadingChat, setLoadingChat] = useState(true);
   const [error, setError] = useState("");
-
-  // --------------------------------------------------
-  // File selection
-  // --------------------------------------------------
-
-  const handleFileSelect = async (event) => {
-    const selectedFiles = Array.from(event.target.files);
-
-    if (!selectedFiles.length) {
-      return;
-    }
-
-    setError("");
-
-    const nextFiles = [
-      ...files,
-      ...selectedFiles,
-    ];
-
-    event.target.value = "";
-
-    const uploaded = await uploadFiles(nextFiles);
-
-    if (uploaded) {
-      setFiles(nextFiles);
-      setAnswers([]);
-    }
-  };
-
-  // --------------------------------------------------
-  // Upload all files in the current analysis workspace
-  // --------------------------------------------------
-
-  const uploadFiles = async (workspaceFiles) => {
-    if (!workspaceFiles.length) {
-      return false;
-    }
-
-    setUploading(true);
-    setError("");
-
-    try {
-      const formData = new FormData();
-
-      workspaceFiles.forEach((file) => {
-        formData.append("files", file);
-      });
-
-      if (datasetId) {
-        formData.append("dataset_id", datasetId);
-      }
-
-      const response = await fetch(
-        `${API_BASE_URL}/files/upload-multiple`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => null);
-
-        throw new Error(
-          errorData?.detail ||
-            "Failed to upload files"
-        );
-      }
-
-      const data = await response.json();
-
-      console.log(
-        "Multi-file upload response:",
-        data
-      );
-
-      if (!data.dataset_id) {
-        throw new Error(
-          "Dataset ID was not returned by the server"
-        );
-      }
-
-      setDatasetId(data.dataset_id);
-
-      return true;
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        err.message ||
-          "Something went wrong while uploading your files."
-      );
-
-      return false;
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // Remove file
-  // --------------------------------------------------
-
-  const removeFile = async (indexToRemove) => {
-    const nextFiles = files.filter(
-      (_, index) => index !== indexToRemove
-    );
-
-    setAnswers([]);
-
-    if (nextFiles.length === 0) {
-      setFiles([]);
-      setDatasetId(null);
-      return;
-    }
-
-    const uploaded = await uploadFiles(nextFiles);
-
-    if (uploaded) {
-      setFiles(nextFiles);
-    }
-  };
-
-  // --------------------------------------------------
-  // File picker
-  // --------------------------------------------------
-
-  const openFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  // --------------------------------------------------
-  // Ask NexaMind
-  // --------------------------------------------------
-
-  const askNexaMind = async () => {
-    if (!question.trim()) {
-      return;
-    }
-
-    if (!datasetId) {
-      setError(
-        "Please upload a financial file first."
-      );
-
-      return;
-    }
-
-    setAsking(true);
-    setError("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/ask`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            dataset_id: datasetId,
-            question: question.trim(),
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          "Failed to get answer"
-        );
-      }
-
-      const data = await response.json();
-
-      console.log("Ask response:", data);
-
-      setAnswers((currentAnswers) => [
-        ...currentAnswers,
-        data,
-      ]);
-
-      setQuestion("");
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Something went wrong while analysing your data."
-      );
-    } finally {
-      setAsking(false);
-    }
-  };
-
-  // --------------------------------------------------
-  // Example question
-  // --------------------------------------------------
-
-  const askExample = (exampleQuestion) => {
-    setQuestion(exampleQuestion);
-  };
-
-  // --------------------------------------------------
-  // Enter key
-  // --------------------------------------------------
-
-  const handleQuestionKeyDown = (event) => {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey
-    ) {
-      event.preventDefault();
-
-      askNexaMind();
-    }
-  };
-
-  // --------------------------------------------------
-  // Gemini configuration
-  // --------------------------------------------------
 
   const checkGeminiConfiguration = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/settings/gemini-status`
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          "Failed to check Gemini configuration"
-        );
-      }
-
+      const response = await fetch(`${API_BASE_URL}/settings/gemini-status`);
       const data = await response.json();
-
-      setGeminiConfigured(
-        Boolean(data.configured)
-      );
+      setGeminiConfigured(Boolean(data.configured));
     } catch (err) {
-      console.error(
-        "Failed to check Gemini configuration:",
-        err
-      );
-
+      console.error(err);
       setGeminiConfigured(false);
     }
   };
 
-  useEffect(() => {
-    checkGeminiConfiguration();
-  }, []);
+  const refreshConversations = async () => {
+    const response = await fetch(`${API_BASE_URL}/conversations`);
+    if (!response.ok) throw new Error("Failed to load chat history");
+    const data = await response.json();
+    setConversations(data.conversations || []);
+    return data.conversations || [];
+  };
 
-  // --------------------------------------------------
-  // Render result
-  // --------------------------------------------------
+  const applyConversation = (data) => {
+    setConversationId(data.id);
+    setConversationTitle(data.title || "New analysis");
+    setDatasetId(data.dataset_id || null);
+    setFiles((data.workbooks || []).map((workbook) => ({
+      name: workbook.filename,
+      workbookId: workbook.workbook_id,
+      persisted: true,
+    })));
+    const restoredAnswers = (data.messages || [])
+      .filter((message) => message.role === "assistant" && message.payload)
+      .map((message) => message.payload);
+    setAnswers(restoredAnswers);
+    setQuestion("");
+    setError("");
+    localStorage.setItem("nexamind.activeConversationId", data.id);
+  };
+
+  const openConversation = async (id) => {
+    setLoadingChat(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/conversations/${id}`);
+      if (!response.ok) throw new Error("Failed to open conversation");
+      applyConversation(await response.json());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingChat(false);
+    }
+  };
+
+  const newChat = () => {
+    setConversationId(null);
+    setConversationTitle("New analysis");
+    setDatasetId(null);
+    setFiles([]);
+    setAnswers([]);
+    setQuestion("");
+    setError("");
+    localStorage.removeItem("nexamind.activeConversationId");
+  };
+
+  const bootstrap = async () => {
+    try {
+      await checkGeminiConfiguration();
+      const items = await refreshConversations();
+      const remembered = localStorage.getItem("nexamind.activeConversationId");
+      const target = items.find((item) => item.id === remembered) || items[0];
+      if (target) await openConversation(target.id);
+      else setLoadingChat(false);
+    } catch (err) {
+      console.error(err);
+      setError("Could not restore NexaMind history.");
+      setLoadingChat(false);
+    }
+  };
+
+  useEffect(() => { bootstrap(); }, []);
+
+  const handleFileSelect = async (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!selectedFiles.length) return;
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      selectedFiles.forEach((file) => formData.append("files", file));
+      if (conversationId) formData.append("conversation_id", conversationId);
+      if (datasetId) formData.append("dataset_id", datasetId);
+      formData.append("append", conversationId ? "true" : "false");
+      const response = await fetch(`${API_BASE_URL}/files/upload-multiple`, { method: "POST", body: formData });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Failed to upload files");
+      setConversationId(data.conversation_id);
+      setDatasetId(data.dataset_id);
+      setFiles((data.workbooks || []).map((workbook) => ({
+        name: workbook.filename,
+        workbookId: workbook.workbook_id,
+        persisted: true,
+      })));
+      localStorage.setItem("nexamind.activeConversationId", data.conversation_id);
+      await refreshConversations();
+      const detail = await fetch(`${API_BASE_URL}/conversations/${data.conversation_id}`);
+      if (detail.ok) {
+        const chat = await detail.json();
+        setConversationTitle(chat.title || "New analysis");
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Something went wrong while uploading your files.");
+    } finally { setUploading(false); }
+  };
+
+  const removeFile = async (file) => {
+    if (!conversationId || !file.workbookId) return;
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/files/${conversationId}/${file.workbookId}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Failed to remove workbook");
+      setFiles((data.workbooks || []).map((workbook) => ({ name: workbook.filename, workbookId: workbook.workbook_id, persisted: true })));
+      await refreshConversations();
+    } catch (err) { setError(err.message); }
+  };
+
+  const askNexaMind = async () => {
+    if (!question.trim() || !datasetId) return;
+    setAsking(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataset_id: datasetId, conversation_id: conversationId, question: question.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "Failed to get answer");
+      setAnswers((current) => [...current, data]);
+      setQuestion("");
+      const items = await refreshConversations();
+      const current = items.find((item) => item.id === conversationId);
+      if (current) setConversationTitle(current.title);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Something went wrong while analysing your data.");
+    } finally { setAsking(false); }
+  };
+
+  const deleteChat = async (event, id) => {
+    event.stopPropagation();
+    if (!window.confirm("Delete this chat and its locally stored workbooks?")) return;
+    const response = await fetch(`${API_BASE_URL}/conversations/${id}`, { method: "DELETE" });
+    if (!response.ok) return;
+    if (id === conversationId) newChat();
+    await refreshConversations();
+  };
+
+  const renameChat = async () => {
+    if (!conversationId) return;
+    const title = window.prompt("Rename chat", conversationTitle);
+    if (!title?.trim()) return;
+    const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim() }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      setConversationTitle(data.title);
+      await refreshConversations();
+    }
+  };
+
+  const handleQuestionKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); askNexaMind(); }
+  };
+
+  const openFilePicker = () => fileInputRef.current?.click();
 
 // --------------------------------------------------
 // Format table values
@@ -433,7 +393,8 @@ const renderCalculationTable = (calculation) => {
               )
             }
           >
-            Export Excel
+            <ExcelIcon />
+            <span>Export Excel</span>
           </button>
 
           <button
@@ -445,7 +406,8 @@ const renderCalculationTable = (calculation) => {
               )
             }
           >
-            Export PDF
+            <PdfIcon />
+            <span>Export PDF</span>
           </button>
         </div>
       </div>
@@ -547,25 +509,10 @@ const renderAnswerResult = (answer) => {
 };
 
 
-  // --------------------------------------------------
-  // Gemini configuration gate
-  // --------------------------------------------------
+
 
   if (geminiConfigured === null) {
-    return (
-      <div className="app">
-        <div
-          style={{
-            minHeight: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          Loading NexaMind...
-        </div>
-      </div>
-    );
+    return <div className="app loading-screen">Loading NexaMind...</div>;
   }
 
   if (!geminiConfigured || showSettings) {
@@ -573,550 +520,233 @@ const renderAnswerResult = (answer) => {
       <GeminiSetup
         apiBaseUrl={API_BASE_URL}
         isSettings={showSettings}
-        onConnected={() => {
-          setGeminiConfigured(true);
-          setShowSettings(false);
-        }}
-        onCancel={
-          geminiConfigured
-            ? () => setShowSettings(false)
-            : undefined
-        }
+        onConnected={() => { setGeminiConfigured(true); setShowSettings(false); }}
+        onCancel={geminiConfigured ? () => setShowSettings(false) : undefined}
       />
     );
   }
 
-  // --------------------------------------------------
-  // Render
-  // --------------------------------------------------
-
   return (
-    <div className="app">
-
-      {/* Header */}
-
-      <header className="header">
-
-        <div className="brand">
-
-          <div className="brand-icon">
-            N
-          </div>
-
+    <div className="chat-app">
+      <aside className="chat-sidebar">
+        <div className="sidebar-brand">
+          <div className="brand-icon">N</div>
           <div>
-            <div className="brand-name">
-              NexaMind
-            </div>
-
-            <div className="brand-tagline">
-              Financial Intelligence
-            </div>
+            <strong>NexaMind</strong>
+            <span>Financial Intelligence</span>
           </div>
-
         </div>
 
-        <div className="header-right">
+        <button className="new-chat-button" onClick={newChat}>
+          <span className="new-chat-plus">＋</span>
+          <span>New chat</span>
+        </button>
 
-          <span className="status-dot"></span>
+        <div className="history-label">RECENT</div>
 
-          <span>AI Copilot</span>
-
-          <button
-            type="button"
-            className="settings-button"
-            onClick={() =>
-              setShowSettings(true)
-            }
-            title="AI Connection Settings"
-          >
-            ⚙ Settings
-          </button>
-
-        </div>
-
-      </header>
-
-      <main className="main">
-
-        {/* Hero */}
-
-        <section className="hero">
-
-          <div className="eyebrow">
-            FINANCIAL AI COPILOT
-          </div>
-
-          <h1>
-            Understand your financial data
-            <br />
-            <span>
-              with intelligence.
-            </span>
-          </h1>
-
-          <p>
-            Upload your financial documents,
-            ask questions,
-            <br />
-            and get clear answers backed by
-            your data.
-          </p>
-
-        </section>
-
-        {/* Workspace */}
-
-        <section className="workspace">
-
-          {/* Upload Card */}
-
-          <div className="card upload-card">
-
-            <div className="card-header">
-
-              <div>
-
-                <h2>
-                  Financial documents
-                </h2>
-
-                <p>
-                  Upload one or more files
-                  to get started.
-                </p>
-
-              </div>
-
-              {files.length > 0 && (
-                <span className="file-count">
-                  {files.length}{" "}
-                  {files.length === 1
-                    ? "file"
-                    : "files"}
-                </span>
-              )}
-
-            </div>
-
-            <div
-              className="drop-zone"
-              onClick={openFilePicker}
+        <div className="history-list">
+          {conversations.map((chat) => (
+            <button
+              key={chat.id}
+              className={`history-item ${chat.id === conversationId ? "active" : ""}`}
+              onClick={() => openConversation(chat.id)}
             >
-
-              <div className="upload-circle">
-                ↑
-              </div>
-
-              <h3>
-                Drop your files here
-              </h3>
-
-              <p>
-                or{" "}
+              <span className="history-icon" aria-hidden="true">▤</span>
+              <div className="history-copy">
+                <strong>{chat.title}</strong>
                 <span>
-                  browse from your computer
+                  {chat.file_count} {chat.file_count === 1 ? "file" : "files"}
                 </span>
-              </p>
-
-              <div className="supported-files">
-                XLSX &nbsp;•&nbsp; XLS
               </div>
+              <span
+                className="history-delete"
+                onClick={(event) => deleteChat(event, chat.id)}
+                title="Delete chat"
+              >
+                ×
+              </span>
+            </button>
+          ))}
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".xlsx,.xls"
-                onChange={handleFileSelect}
-                hidden
-              />
-
+          {conversations.length === 0 && (
+            <div className="history-empty">
+              Your chats will appear here.
             </div>
+          )}
+        </div>
 
-            {/* Upload status */}
+        <button
+          className="sidebar-settings"
+          onClick={() => setShowSettings(true)}
+        >
+          <span className="settings-icon-wrap">
+            <SettingsIcon />
+          </span>
+          <span>Settings</span>
+          <span className="settings-chevron">›</span>
+        </button>
+      </aside>
 
-            {uploading && (
-              <div className="upload-status">
-                Uploading and analysing your
-                financial data...
-              </div>
+      <section className="chat-main">
+        <header className="chat-header">
+          <div className="chat-title-block">
+            <h1>{conversationTitle}</h1>
+            <p>
+              {files.length
+                ? `${files.length} workbook${files.length === 1 ? "" : "s"} in this chat`
+                : "Start a new financial analysis"}
+            </p>
+          </div>
+
+          <div className="chat-header-actions">
+            {conversationId && (
+              <button className="rename-button" onClick={renameChat}>
+                <span aria-hidden="true">✎</span>
+                Rename
+              </button>
             )}
+          </div>
+        </header>
 
-            {/* Files */}
+        <div className="chat-scroll">
+          {loadingChat ? (
+            <div className="chat-empty">Restoring your workspace...</div>
+          ) : (
+            <>
+              <div className="workspace-files">
+                <div className="workspace-files-head">
+                  <div className="workspace-heading">
+                    <div className="workspace-heading-icon" aria-hidden="true">▰</div>
+                    <div>
+                      <strong>Files for this chat</strong>
+                      <span>These workbooks stay attached to this conversation.</span>
+                    </div>
+                  </div>
 
-            {files.length > 0 && (
-              <div className="file-list">
+                  <button
+                    className="add-files-button"
+                    onClick={openFilePicker}
+                    disabled={uploading}
+                  >
+                    {uploading ? "Uploading..." : "＋ Add files"}
+                  </button>
+                </div>
 
-                {files.map(
-                  (file, index) => (
-                    <div
-                      className="file-item"
-                      key={`${file.name}-${index}`}
-                    >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelect}
+                  hidden
+                />
 
-                      <div className="file-left">
-
-                        <div className="file-type-icon">
-                          {file.name
-                            .toLowerCase()
-                            .endsWith(".pdf")
-                            ? "PDF"
-                            : "XLS"}
-                        </div>
-
-                        <div>
-
-                          <div className="file-name">
-                            {file.name}
-                          </div>
-
-                          <div className="file-meta">
-                            {(
-                              file.size / 1024
-                            ).toFixed(1)}{" "}
-                            KB
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                      <div className="file-right">
-
-                        <span className="ready">
-                          ✓ Ready
-                        </span>
-
+                {files.length > 0 ? (
+                  <div className="file-chips">
+                    {files.map((file) => (
+                      <div className="file-chip" key={file.workbookId || file.name}>
+                        <span className="file-type-icon">XLS</span>
+                        <span className="file-chip-name">{file.name}</span>
                         <button
-                          className="remove-button"
-                          onClick={(
-                            event
-                          ) => {
-                            event.stopPropagation();
-
-                            removeFile(
-                              index
-                            );
-                          }}
+                          className="file-chip-remove"
+                          onClick={() => removeFile(file)}
+                          title={`Remove ${file.name}`}
                         >
                           ×
                         </button>
-
                       </div>
-
-                    </div>
-                  )
+                    ))}
+                  </div>
+                ) : (
+                  <button className="empty-upload" onClick={openFilePicker}>
+                    <span className="empty-upload-icon" aria-hidden="true">↑</span>
+                    <span>Upload one or more Excel workbooks</span>
+                  </button>
                 )}
-
-              </div>
-            )}
-
-          </div>
-
-          {/* Ask Card */}
-
-          <div className="card question-card">
-
-            <div className="question-heading">
-
-              <div className="ai-icon">
-                ✦
               </div>
 
-              <div>
-
-                <h2>
-                  Ask NexaMind
-                </h2>
-
-                <p>
-                  Ask questions about your
-                  uploaded data.
-                </p>
-
-              </div>
-
-            </div>
-
-            <div className="question-input">
-
-              <textarea
-                value={question}
-                onChange={(event) =>
-                  setQuestion(
-                    event.target.value
-                  )
-                }
-                onKeyDown={
-                  handleQuestionKeyDown
-                }
-                placeholder="e.g. Which region generated the highest profit?"
-                rows="4"
-              />
-
-              <div className="question-footer">
-
-                <span>
-                  {datasetId
-                    ? "NexaMind will analyse your uploaded files"
-                    : "Upload a file to start analysing"}
-                </span>
-
-                <button
-                  className="ask-button"
-                  onClick={askNexaMind}
-                  disabled={
-                    asking ||
-                    !question.trim() ||
-                    !datasetId
-                  }
-                >
-                  {asking
-                    ? "Analysing..."
-                    : "Ask NexaMind"}
-
-                  {!asking && (
-                    <span>
-                      →
-                    </span>
-                  )}
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </section>
-
-        {/* Error */}
-
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-
-        {/* Answers */}
-
-        {answers.length > 0 && (
-          <section className="answers-section">
-
-            <div className="answers-header">
-              <div>
-                <h2>
-                  Analysis
-                </h2>
-
-                <p>
-                  Your questions and NexaMind
-                  results.
-                </p>
-              </div>
-
-              <span className="answer-count">
-                {answers.length}{" "}
-                {answers.length === 1
-                  ? "answer"
-                  : "answers"}
-              </span>
-            </div>
-
-            {answers.map(
-              (answer, index) => (
-                <div
-                  className="card answer-card"
-                  key={index}
-                >
-
-                  {/* Answer header */}
-
-                  <div className="answer-card-header">
-
-                    <div className="answer-number">
-                      {index + 1}
-                    </div>
-
-                    <div>
-
-                      <div className="answer-card-title">
-                        NexaMind's answer
-                      </div>
-
-                      <div className="answer-card-subtitle">
-                        Analysis based on your
-                        financial data
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  {/* Question */}
-
-                  <div className="asked-question">
-
-                    <div className="asked-question-label">
-                      You asked
-                    </div>
-
-                    <div className="asked-question-text">
-                      {answer.question}
-                    </div>
-
-                  </div>
-
-                  {/* Result */}
-
-                  <div className="answer-content">
-
-                    <div className="answer-label">
-                      Answer
-                    </div>
-
-                    {renderAnswerResult(
-                      answer
-                    )}
-
-                    {Array.isArray(answer.calculations) &&
-                      answer.calculations.length > 0 && (
-                        <div className="answer-details">
-
-                          {answer.calculations.map(
-                            (calculation) => (
-                              <div
-                                key={calculation.id}
-                              >
-                                {calculation.operation}
-
-                                {calculation.column && (
-                                  <>
-                                    {" "}of{" "}
-
-                                    <strong>
-                                      {calculation.column}
-                                    </strong>
-                                  </>
-                                )}
-
-                                {(
-                              calculation.operation ===
-                              "GROUP_BY" ||
-                              calculation.operation ===
-                              "GROUP_BY_METRICS"
-                              ) &&
-                              calculation.group_by && (
-                                    <>
-                                      {" "}
-                                      grouped by{" "}
-
-                                      <strong>
-                                        {calculation.group_by}
-                                      </strong>
-                                    </>
-                                  )}
-
-                                {calculation.sheet && (
-                                  <>
-                                    {" "}from{" "}
-
-                                    <strong>
-                                      {calculation.sheet}
-                                    </strong>
-                                  </>
-                                )}
-                              </div>
-                            )
-                          )}
-
-                        </div>
-                      )}
-
-                  </div>
-
+              {answers.length === 0 && files.length === 0 && (
+                <div className="chat-empty welcome-state">
+                  <div className="empty-logo">N</div>
+                  <h2>What would you like to analyse?</h2>
+                  <p>
+                    Upload financial workbooks to this chat, then ask NexaMind
+                    questions about them.
+                  </p>
                 </div>
-              )
-            )}
+              )}
 
-          </section>
-        )}
+              <div className="message-list">
+                {answers.map((answer, index) => (
+                  <div
+                    className="conversation-turn"
+                    key={`${answer.question}-${index}`}
+                  >
+                    <div className="user-message">
+                      <div className="message-avatar user">You</div>
+                      <div className="user-message-bubble">{answer.question}</div>
+                    </div>
 
-        {/* Example questions */}
+                    <div className="assistant-message">
+                      <div className="message-avatar ai">N</div>
+                      <div className="assistant-body">
+                        {renderAnswerResult(answer)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-        <section className="examples">
+              {error && <div className="error-message">{error}</div>}
+            </>
+          )}
+        </div>
 
-          <div className="examples-title">
-            Try asking
+        <div className="composer-wrap">
+          <div className="composer">
+            <button
+              type="button"
+              className="composer-attach"
+              onClick={openFilePicker}
+              disabled={uploading}
+              title="Add workbooks"
+              aria-label="Add workbooks"
+            >
+              ＋
+            </button>
+
+            <textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={handleQuestionKeyDown}
+              placeholder={
+                datasetId
+                  ? "Ask about these workbooks..."
+                  : "Upload files to start analysing..."
+              }
+              rows="2"
+              disabled={!datasetId || asking}
+            />
+
+            <button
+              type="button"
+              className="composer-send"
+              onClick={askNexaMind}
+              disabled={asking || !question.trim() || !datasetId}
+              aria-label="Send question"
+              title="Send"
+            >
+              {asking ? "…" : "↑"}
+            </button>
           </div>
 
-          <div className="example-list">
-
-            <button
-              className="example-card"
-              onClick={() =>
-                askExample(
-                  "Which country generated the highest profit?"
-                )
-              }
-            >
-              <span>
-                ↗
-              </span>
-
-              Which country generated the
-              highest profit?
-            </button>
-
-            <button
-              className="example-card"
-              onClick={() =>
-                askExample(
-                  "Calculate the total profit."
-                )
-              }
-            >
-              <span>
-                ↗
-              </span>
-
-              Calculate the total profit.
-            </button>
-
-            <button
-              className="example-card"
-              onClick={() =>
-                askExample(
-                  "Which product generated the highest profit?"
-                )
-              }
-            >
-              <span>
-                ↗
-              </span>
-
-              Which product generated the
-              highest profit?
-            </button>
-
+          <div className="privacy-note">
+            <span aria-hidden="true">◉</span>
+            Workbook row data is analysed locally. NexaMind sends schema metadata
+            and your question to the configured AI planner.
           </div>
-
-        </section>
-
-      </main>
-
-      <footer className="footer">
-
-        <span>
-          NexaMind
-        </span>
-
-        <span>
-          Financial AI Copilot
-        </span>
-
-      </footer>
-
+        </div>
+      </section>
     </div>
   );
 }

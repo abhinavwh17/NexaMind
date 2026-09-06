@@ -120,3 +120,31 @@
   color: #b42318;
   font-size: 13px;
 }
+
+/* ==================================================
+   Settings navigation
+================================================== */
+
+.gemini-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5f6678;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.gemini-back-button:hover {
+  color: #6f4ef6;
+}
+
+.gemini-back-button span {
+  font-size: 18px;
+  line-height: 1;
+}

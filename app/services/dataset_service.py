@@ -1,77 +1,76 @@
 import uuid
 
+from app.services.excel_service import analyse_excel
+from app.services.conversation_service import (
+    get_conversation_by_dataset,
+    list_workbook_records,
+)
 
-# Temporary in-memory storage.
-# A dataset now represents one analysis workspace that may contain
-# one or more Excel workbooks.
+# Runtime cache only. Durable copies live on disk and can rebuild this cache.
 datasets = {}
 
 
-def _create_workbook_entry(filename: str, sheets: dict):
+def _create_workbook_entry(filename: str, sheets: dict, workbook_id: str | None = None):
     return {
-        "workbook_id": str(uuid.uuid4()),
+        "workbook_id": workbook_id or str(uuid.uuid4()),
         "filename": filename,
         "sheets": sheets,
     }
 
 
 def create_dataset(filename: str, sheets: dict):
-    """
-    Backward-compatible helper for a single workbook.
-    """
-    return create_or_replace_dataset(
-        workbooks=[
-            {
-                "filename": filename,
-                "sheets": sheets,
-            }
-        ]
-    )
+    return create_or_replace_dataset(workbooks=[{"filename": filename, "sheets": sheets}])
 
 
-def create_or_replace_dataset(
-    workbooks: list[dict],
-    dataset_id: str | None = None,
-):
-    """
-    Create a new analysis workspace, or replace the workbooks inside an
-    existing workspace while keeping the same dataset_id.
-
-    Each workbook gets its own internal workbook_id so duplicate filenames
-    are safe and the LLM can reference a specific workbook without relying
-    on the filename as an identifier.
-    """
-    if dataset_id and dataset_id in datasets:
-        target_dataset_id = dataset_id
-    else:
-        target_dataset_id = str(uuid.uuid4())
-
-    workbook_entries = []
-
+def create_or_replace_dataset(workbooks: list[dict], dataset_id: str | None = None):
+    target_dataset_id = dataset_id or str(uuid.uuid4())
+    entries = []
     for workbook in workbooks:
-        workbook_entries.append(
+        entries.append(
             _create_workbook_entry(
                 filename=workbook["filename"],
                 sheets=workbook["sheets"],
+                workbook_id=workbook.get("workbook_id"),
             )
         )
-
-    datasets[target_dataset_id] = {
-        "workbooks": workbook_entries,
-    }
-
+    datasets[target_dataset_id] = {"workbooks": entries}
     return target_dataset_id
 
 
+def restore_dataset(dataset_id: str):
+    conversation = get_conversation_by_dataset(dataset_id)
+    if not conversation:
+        return None
+    workbooks = []
+    for record in list_workbook_records(conversation["id"]):
+        try:
+            content = open(record["local_path"], "rb").read()
+            sheets = analyse_excel(content)
+        except FileNotFoundError:
+            continue
+        workbooks.append({
+            "workbook_id": record["id"],
+            "filename": record["filename"],
+            "sheets": sheets,
+        })
+    return create_or_replace_dataset(workbooks, dataset_id=dataset_id) and datasets[dataset_id]
+
+
 def get_dataset(dataset_id: str):
-    return datasets.get(dataset_id)
+    dataset = datasets.get(dataset_id)
+    if dataset is not None:
+        return dataset
+    return restore_dataset(dataset_id)
+
+
+def clear_dataset(dataset_id: str):
+    datasets.pop(dataset_id, None)
 
 
 def get_workbook(dataset: dict, workbook_id: str):
     for workbook in dataset.get("workbooks", []):
         if workbook.get("workbook_id") == workbook_id:
             return workbook
-
     return None
 
 
