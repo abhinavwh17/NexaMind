@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./GeminiSetup.css";
 
-function GeminiSetup({ apiBaseUrl, onConnected }) {
+function GeminiSetup({ apiBaseUrl, onConnected, onCancel, isSettings = false }) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,17 +49,29 @@ function GeminiSetup({ apiBaseUrl, onConnected }) {
   return (
     <div className="gemini-setup-page">
       <div className="gemini-setup-card">
+        {isSettings && onCancel && (
+          <button
+            type="button"
+            className="gemini-back-button"
+            onClick={onCancel}
+          >
+            <span aria-hidden="true">←</span>
+            Back to chat
+          </button>
+        )}
+
         <div className="gemini-setup-logo">
           ✦
         </div>
 
         <h1>NexaMind</h1>
 
-        <h2>Connect Gemini</h2>
+        <h2>{isSettings ? "Gemini Settings" : "Connect Gemini"}</h2>
 
         <p className="gemini-setup-description">
-          Add your Gemini API key to start asking questions
-          about your uploaded workbook.
+          {isSettings
+            ? "Update your Gemini API key, or return to your chat without making any changes."
+            : "Add your Gemini API key to start asking questions about your uploaded workbook."}
         </p>
 
         <label className="gemini-key-label">
@@ -103,8 +115,8 @@ function GeminiSetup({ apiBaseUrl, onConnected }) {
           disabled={saving}
         >
           {saving
-            ? "Connecting..."
-            : "Connect & Continue"}
+            ? (isSettings ? "Updating..." : "Connecting...")
+            : (isSettings ? "Update API Key" : "Connect & Continue")}
         </button>
 
         <div className="gemini-setup-security">
