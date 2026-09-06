@@ -36,36 +36,46 @@ function App() {
 
     setError("");
 
-    setFiles((currentFiles) => [
-      ...currentFiles,
+    const nextFiles = [
+      ...files,
       ...selectedFiles,
-    ]);
+    ];
 
     event.target.value = "";
 
-    // Upload the first selected file to backend
-    // Multiple files can be added to the UI.
-    // We can extend backend support for multiple files later.
-    const file = selectedFiles[0];
+    const uploaded = await uploadFiles(nextFiles);
 
-    await uploadFile(file);
+    if (uploaded) {
+      setFiles(nextFiles);
+      setAnswers([]);
+    }
   };
 
   // --------------------------------------------------
-  // Upload file
+  // Upload all files in the current analysis workspace
   // --------------------------------------------------
 
-  const uploadFile = async (file) => {
+  const uploadFiles = async (workspaceFiles) => {
+    if (!workspaceFiles.length) {
+      return false;
+    }
+
     setUploading(true);
     setError("");
 
     try {
       const formData = new FormData();
 
-      formData.append("file", file);
+      workspaceFiles.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      if (datasetId) {
+        formData.append("dataset_id", datasetId);
+      }
 
       const response = await fetch(
-        `${API_BASE_URL}/files/upload`,
+        `${API_BASE_URL}/files/upload-multiple`,
         {
           method: "POST",
           body: formData,
@@ -73,26 +83,41 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to upload file");
+        const errorData = await response
+          .json()
+          .catch(() => null);
+
+        throw new Error(
+          errorData?.detail ||
+            "Failed to upload files"
+        );
       }
 
       const data = await response.json();
 
-      console.log("Upload response:", data);
+      console.log(
+        "Multi-file upload response:",
+        data
+      );
 
-      if (data.dataset_id) {
-        setDatasetId(data.dataset_id);
-      } else {
+      if (!data.dataset_id) {
         throw new Error(
           "Dataset ID was not returned by the server"
         );
       }
+
+      setDatasetId(data.dataset_id);
+
+      return true;
     } catch (err) {
       console.error(err);
 
       setError(
-        "Something went wrong while uploading your file."
+        err.message ||
+          "Something went wrong while uploading your files."
       );
+
+      return false;
     } finally {
       setUploading(false);
     }
@@ -102,16 +127,24 @@ function App() {
   // Remove file
   // --------------------------------------------------
 
-  const removeFile = (indexToRemove) => {
-    setFiles((currentFiles) =>
-      currentFiles.filter(
-        (_, index) => index !== indexToRemove
-      )
+  const removeFile = async (indexToRemove) => {
+    const nextFiles = files.filter(
+      (_, index) => index !== indexToRemove
     );
 
-    // For now, clear analysis history when files change.
     setAnswers([]);
-    setDatasetId(null);
+
+    if (nextFiles.length === 0) {
+      setFiles([]);
+      setDatasetId(null);
+      return;
+    }
+
+    const uploaded = await uploadFiles(nextFiles);
+
+    if (uploaded) {
+      setFiles(nextFiles);
+    }
   };
 
   // --------------------------------------------------
