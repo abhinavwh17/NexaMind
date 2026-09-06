@@ -44,6 +44,12 @@ class AskRequest(BaseModel):
 
 SUPPORTED_DATASET_OPERATIONS = {
     "UNION",
+    "JOIN",
+}
+
+ALLOWED_JOIN_TYPES = {
+    "inner",
+    "left",
 }
 
 
@@ -384,6 +390,84 @@ def validate_plan(
                             "requires sheet"
                         )
 
+
+            elif operation == "JOIN":
+
+                left = calculation.get(
+                    "left"
+                )
+
+                right = calculation.get(
+                    "right"
+                )
+
+                for side_name, source in [
+                    ("left", left),
+                    ("right", right),
+                ]:
+
+                    if not isinstance(
+                        source,
+                        dict
+                    ):
+
+                        raise ValueError(
+                            f"JOIN '{calculation_id}' requires "
+                            f"a {side_name} source object"
+                        )
+
+                    if not source.get(
+                        "workbook_id"
+                    ):
+
+                        raise ValueError(
+                            f"JOIN '{calculation_id}' {side_name} "
+                            "source requires workbook_id"
+                        )
+
+                    if not source.get(
+                        "sheet"
+                    ):
+
+                        raise ValueError(
+                            f"JOIN '{calculation_id}' {side_name} "
+                            "source requires sheet"
+                        )
+
+                left_on = calculation.get(
+                    "left_on"
+                )
+
+                right_on = calculation.get(
+                    "right_on"
+                )
+
+                if not left_on:
+
+                    raise ValueError(
+                        f"JOIN '{calculation_id}' requires left_on"
+                    )
+
+                if not right_on:
+
+                    raise ValueError(
+                        f"JOIN '{calculation_id}' requires right_on"
+                    )
+
+                join_type = str(
+                    calculation.get(
+                        "how",
+                        "inner"
+                    )
+                ).lower()
+
+                if join_type not in ALLOWED_JOIN_TYPES:
+
+                    raise ValueError(
+                        f"JOIN '{calculation_id}' has unsupported "
+                        f"join type '{join_type}'"
+                    )
+
         # =================================================
         # Normal workbook or intermediate-dataset operation
         # =================================================
@@ -573,6 +657,296 @@ def execute_union(
 
     return (
         union_dataframe,
+        result
+    )
+
+
+# =========================================================
+# JOIN execution
+# =========================================================
+
+
+def _normalize_join_columns(
+    value,
+    field_name: str
+):
+    if isinstance(
+        value,
+        str
+    ):
+
+        columns = [
+            value
+        ]
+
+    elif isinstance(
+        value,
+        list
+    ):
+
+        columns = value
+
+    else:
+
+        raise ValueError(
+            f"{field_name} must be a string or list"
+        )
+
+    if not columns:
+
+        raise ValueError(
+            f"{field_name} cannot be empty"
+        )
+
+    normalized = []
+
+    for column in columns:
+
+        if (
+            not isinstance(
+                column,
+                str
+            )
+            or
+            not column
+        ):
+
+            raise ValueError(
+                f"{field_name} contains an invalid column"
+            )
+
+        normalized.append(
+            column
+        )
+
+    return normalized
+
+
+def _get_source_dataframe(
+    dataset: dict,
+    source: dict,
+    operation_name: str,
+    side_name: str
+):
+    workbook_id = source.get(
+        "workbook_id"
+    )
+
+    sheet_name = source.get(
+        "sheet"
+    )
+
+    workbook = get_workbook(
+        dataset,
+        workbook_id
+    )
+
+    if not workbook:
+
+        raise ValueError(
+            f"Unknown workbook_id in {operation_name} "
+            f"{side_name} source: {workbook_id}"
+        )
+
+    sheets = workbook.get(
+        "sheets",
+        {}
+    )
+
+    if sheet_name not in sheets:
+
+        raise ValueError(
+            f"Sheet '{sheet_name}' does not exist in "
+            f"workbook '{workbook['filename']}'"
+        )
+
+    return (
+        sheets[
+            sheet_name
+        ]
+        .copy()
+    )
+
+
+def execute_join(
+    dataset: dict,
+    calculation: dict
+):
+    """
+    Create a temporary local DataFrame by joining two workbook sheets.
+
+    Phase 4 intentionally uses a controlled many-to-one join:
+    the right-side join key(s) must be unique. This prevents accidental
+    many-to-many row explosions and fits the common finance pattern of
+    enriching transactions with customer/product/reference data.
+
+    Supported join types:
+    - inner
+    - left
+
+    No source workbook is mutated.
+    No row data is sent to the LLM.
+    """
+
+    left_source = calculation.get(
+        "left"
+    )
+
+    right_source = calculation.get(
+        "right"
+    )
+
+    left_dataframe = _get_source_dataframe(
+        dataset=dataset,
+        source=left_source,
+        operation_name="JOIN",
+        side_name="left"
+    )
+
+    right_dataframe = _get_source_dataframe(
+        dataset=dataset,
+        source=right_source,
+        operation_name="JOIN",
+        side_name="right"
+    )
+
+    left_on = _normalize_join_columns(
+        calculation.get(
+            "left_on"
+        ),
+        "left_on"
+    )
+
+    right_on = _normalize_join_columns(
+        calculation.get(
+            "right_on"
+        ),
+        "right_on"
+    )
+
+    if len(
+        left_on
+    ) != len(
+        right_on
+    ):
+
+        raise ValueError(
+            "JOIN left_on and right_on must contain "
+            "the same number of columns"
+        )
+
+    for column in left_on:
+
+        if column not in left_dataframe.columns:
+
+            raise ValueError(
+                f"JOIN left column does not exist: {column}"
+            )
+
+    for column in right_on:
+
+        if column not in right_dataframe.columns:
+
+            raise ValueError(
+                f"JOIN right column does not exist: {column}"
+            )
+
+    join_type = str(
+        calculation.get(
+            "how",
+            "inner"
+        )
+    ).lower()
+
+    if join_type not in ALLOWED_JOIN_TYPES:
+
+        raise ValueError(
+            f"Unsupported JOIN type: {join_type}"
+        )
+
+    # Right-side keys must be unique. This prevents an accidental
+    # many-to-many join from multiplying financial rows.
+    duplicated_right_keys = (
+        right_dataframe
+        .duplicated(
+            subset=right_on,
+            keep=False
+        )
+        .any()
+    )
+
+    if duplicated_right_keys:
+
+        raise ValueError(
+            "JOIN rejected because the right-side join key is not unique. "
+            "Phase 4 supports controlled many-to-one joins only."
+        )
+
+    try:
+
+        joined_dataframe = pd.merge(
+            left_dataframe,
+            right_dataframe,
+            how=join_type,
+            left_on=left_on,
+            right_on=right_on,
+            suffixes=(
+                "_left",
+                "_right"
+            ),
+            copy=True,
+            validate="many_to_one"
+        )
+
+    except Exception as error:
+
+        raise ValueError(
+            f"JOIN failed: {error}"
+        ) from error
+
+    result = {
+        "id":
+            calculation[
+                "id"
+            ],
+
+        "operation":
+            "JOIN",
+
+        "how":
+            join_type,
+
+        "left_on":
+            left_on,
+
+        "right_on":
+            right_on,
+
+        "left_row_count":
+            len(
+                left_dataframe
+            ),
+
+        "right_row_count":
+            len(
+                right_dataframe
+            ),
+
+        "row_count":
+            len(
+                joined_dataframe
+            ),
+
+        "columns":
+            [
+                str(column)
+                for column
+                in joined_dataframe.columns
+            ],
+    }
+
+    return (
+        joined_dataframe,
         result
     )
 
@@ -787,13 +1161,32 @@ async def ask_nexamind(
 
             try:
 
-                (
-                    intermediate_dataframe,
-                    result
-                ) = execute_union(
-                    dataset=dataset,
-                    calculation=calculation
-                )
+                if operation == "UNION":
+
+                    (
+                        intermediate_dataframe,
+                        result
+                    ) = execute_union(
+                        dataset=dataset,
+                        calculation=calculation
+                    )
+
+                elif operation == "JOIN":
+
+                    (
+                        intermediate_dataframe,
+                        result
+                    ) = execute_join(
+                        dataset=dataset,
+                        calculation=calculation
+                    )
+
+                else:
+
+                    raise ValueError(
+                        "Unsupported dataset operation: "
+                        f"{operation}"
+                    )
 
                 intermediate_datasets[
                     calculation[

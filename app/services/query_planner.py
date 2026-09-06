@@ -136,9 +136,7 @@ DATASET-PRODUCING CALCULATIONS
 
 UNION combines rows from two or more compatible workbook sheets.
 
-UNION does NOT include workbook_id or sheet at the calculation root.
-
-It uses:
+UNION uses:
 
 "sources": [
     {{
@@ -154,14 +152,47 @@ It uses:
 UNION currently requires identical column names and column order
 across all source sheets.
 
-UNION produces a temporary local dataset.
+
+JOIN combines columns from two related workbook sheets using matching keys.
+
+JOIN uses:
+
+"left": {{
+    "workbook_id": "<exact id>",
+    "sheet": "<exact sheet>"
+}},
+"right": {{
+    "workbook_id": "<exact id>",
+    "sheet": "<exact sheet>"
+}},
+"left_on": "<exact left key column>",
+"right_on": "<exact right key column>",
+"how": "inner"
+
+left_on and right_on may also be arrays when multiple join keys are required.
+
+Supported join types:
+
+inner
+left
+
+Phase 4 JOIN is a controlled many-to-one join.
+The right-side join key must be unique.
+
+Choose the transactional/fact table as LEFT.
+Choose the customer/product/reference/lookup table as RIGHT.
+
+Do not use JOIN merely because two workbooks exist.
+Use JOIN only when the user's question requires columns from both
+workbooks and the schema contains a clear relationship key.
 
 
 ANALYSIS OF A TEMPORARY DATASET
 -------------------------------
 
-A normal analytical operation may consume a temporary dataset created
-by an earlier UNION calculation.
+UNION and JOIN both produce temporary local datasets.
+
+A normal analytical operation may consume one of these datasets.
 
 Use:
 
@@ -178,8 +209,8 @@ When source.result is used:
 
 Example:
 
-calc_1 = UNION
-calc_2 = GROUP_BY_METRICS using source.result = calc_1
+calc_1 = JOIN
+calc_2 = GROUP_BY using source.result = calc_1
 
 
 RESULT-BASED CALCULATIONS
@@ -190,8 +221,8 @@ COMPARE works only on scalar results produced by earlier calculations.
 COMPARE does NOT include workbook_id or sheet.
 
 
-JOIN and LOOKUP are NOT supported yet.
-Never invent them.
+LOOKUP is NOT supported yet.
+Never invent it.
 
 
 =========================================================
@@ -221,6 +252,7 @@ FIRST
 LAST
 COMPARE
 UNION
+JOIN
 
 
 =========================================================
@@ -505,6 +537,79 @@ Do not include workbook_id or sheet on calculations that use source.result.
 The source columns used after UNION must exist in the unioned source schemas.
 
 Never invent a source column.
+
+
+=========================================================
+JOIN - COMBINE RELATED WORKBOOKS
+=========================================================
+
+Use JOIN when the user needs fields from two workbooks with
+different but related structures.
+
+Typical finance pattern:
+
+Transactions workbook:
+Customer ID | Date | Sales | Profit
+
+Customers workbook:
+Customer ID | Customer Name | Region | Segment
+
+Question:
+
+"Which customer region generated the highest sales?"
+
+
+Return:
+
+{{
+    "calculations": [
+        {{
+            "id": "calc_1",
+            "operation": "JOIN",
+            "left": {{
+                "workbook_id": "<transactions workbook id>",
+                "sheet": "<transactions sheet>"
+            }},
+            "right": {{
+                "workbook_id": "<customers workbook id>",
+                "sheet": "<customers sheet>"
+            }},
+            "left_on": "Customer ID",
+            "right_on": "Customer ID",
+            "how": "inner"
+        }},
+        {{
+            "id": "calc_2",
+            "operation": "GROUP_BY",
+            "source": {{
+                "result": "calc_1"
+            }},
+            "group_by": "Region",
+            "column": "Sales",
+            "aggregation": "SUM",
+            "sort": "DESC",
+            "limit": 1
+        }}
+    ],
+    "answer_template":
+        "{{{{calc_2.group}}}} generated the highest sales with {{{{calc_2.value}}}}."
+}}
+
+
+JOIN RULES:
+
+1. Use exact workbook IDs, sheet names and column names from schema.
+2. Pick the fact/transaction table as LEFT.
+3. Pick the lookup/reference table as RIGHT.
+4. The right join key must represent a unique lookup key.
+5. Use "inner" when only matched records should be analysed.
+6. Use "left" when all left-side records should remain.
+7. Never invent a relationship key.
+8. If no clear shared relationship exists in the schema, do not fabricate a JOIN.
+9. JOIN produces a temporary dataset only. Perform aggregation in a later calculation using source.result.
+10. Do not calculate joined values yourself.
+11. Do not use JOIN for same-schema yearly files when UNION is appropriate.
+12. If both sides contain a non-key column with the same name, Pandas may expose them with _left and _right suffixes. Prefer questions/joins where downstream columns are unambiguous.
 
 
 =========================================================
@@ -1223,12 +1328,18 @@ STRICT OUTPUT RULES
 27. UNION must use sources[] with at least two workbook/sheet sources.
 28. UNION sources must use exact workbook IDs and exact sheet names.
 29. UNION must only be used for compatible same-structure sheets.
-30. A calculation using source.result must reference an earlier UNION result.
-31. A calculation using source.result must NOT include workbook_id or sheet.
-32. COMPARE may reference only earlier calculation IDs.
-33. COMPARE must use result references with calculation_id and field.
-34. COMPARE must NOT include workbook_id or sheet.
-35. Do not invent JOIN or LOOKUP.
+30. JOIN must contain left, right, left_on, right_on and how.
+31. JOIN left/right sources must use exact workbook IDs and exact sheet names.
+32. JOIN may use only "inner" or "left".
+33. JOIN must use exact schema join-key columns.
+34. JOIN should use a transaction/fact dataset on the left and a unique lookup/reference dataset on the right.
+35. Never invent a JOIN relationship when the schema does not show a clear key.
+36. A calculation using source.result must reference an earlier UNION or JOIN result.
+37. A calculation using source.result must NOT include workbook_id or sheet.
+38. COMPARE may reference only earlier calculation IDs.
+39. COMPARE must use result references with calculation_id and field.
+40. COMPARE must NOT include workbook_id or sheet.
+41. Do not invent LOOKUP or other unsupported operations.
 
 
 Return the JSON plan now.
