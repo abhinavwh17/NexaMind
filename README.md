@@ -146,7 +146,7 @@ For example:
 
 The backend validates the plan before executing it against the local workbook.
 
-AI-Powered Excel Analysis
+## AI Excel Analyzer — Natural-Language Excel Analysis
 
 NexaMind uses Gemini to understand the user's analytical intent.
 
