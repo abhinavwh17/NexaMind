@@ -51,7 +51,7 @@ def build_excel_preview(sheets: dict):
 
 def build_excel_schema(sheets: dict):
     """
-    Builds a privacy-safe representation of the workbook.
+    Builds a privacy-safe representation of one workbook.
 
     Only structural information is returned.
 
@@ -90,5 +90,37 @@ def build_excel_schema(sheets: dict):
         schema["sheets"][sheet_name] = {
             "columns": columns
         }
+
+    return schema
+
+
+def build_dataset_schema(dataset: dict):
+    """
+    Builds the privacy-safe schema catalog for every workbook in an
+    analysis workspace.
+
+    This is the only workbook information intended for the LLM:
+    - workbook id
+    - filename
+    - sheet names
+    - column names
+    - detected column types
+
+    No row or cell values are included.
+    """
+    schema = {
+        "workbooks": []
+    }
+
+    for workbook in dataset.get("workbooks", []):
+        workbook_schema = build_excel_schema(
+            workbook.get("sheets", {})
+        )
+
+        schema["workbooks"].append({
+            "workbook_id": workbook.get("workbook_id"),
+            "filename": workbook.get("filename"),
+            "sheets": workbook_schema["sheets"],
+        })
 
     return schema

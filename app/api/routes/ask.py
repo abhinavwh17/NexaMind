@@ -1,18 +1,24 @@
 import re
 
+import pandas as pd
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.dataset_service import (
     get_dataset,
+    get_workbook,
+    get_workbooks,
 )
 
 from app.services.excel_service import (
-    build_excel_schema,
+    build_dataset_schema,
 )
 
 from app.services.calculation_service import (
+    SUPPORTED_RESULT_OPERATIONS,
     execute_calculation,
+    execute_result_calculation,
 )
 
 from app.services.query_planner import (
@@ -30,6 +36,15 @@ class AskRequest(BaseModel):
 
     dataset_id: str
     question: str
+
+
+# =========================================================
+# Cross-workbook dataset operations
+# =========================================================
+
+SUPPORTED_DATASET_OPERATIONS = {
+    "UNION",
+}
 
 
 # =========================================================
@@ -187,6 +202,8 @@ def validate_plan(
         )
 
     calculation_ids = set()
+    available_result_ids = set()
+    available_dataset_result_ids = set()
 
     for calculation in calculations:
 
@@ -217,9 +234,347 @@ def validate_plan(
                 f"Duplicate calculation id: {calculation_id}"
             )
 
+        operation = str(
+            calculation.get(
+                "operation",
+                ""
+            )
+        ).upper()
+
+        if not operation:
+
+            raise ValueError(
+                f"Calculation '{calculation_id}' requires an operation"
+            )
+
+        # =================================================
+        # Result-based scalar calculations
+        # =================================================
+
+        if (
+            operation
+            in SUPPORTED_RESULT_OPERATIONS
+        ):
+
+            if operation == "COMPARE":
+
+                for side in [
+                    "left",
+                    "right",
+                ]:
+
+                    reference = (
+                        calculation.get(
+                            side
+                        )
+                    )
+
+                    if not isinstance(
+                        reference,
+                        dict
+                    ):
+
+                        raise ValueError(
+                            f"COMPARE '{calculation_id}' "
+                            f"requires a {side} result reference"
+                        )
+
+                    reference_id = (
+                        reference.get(
+                            "calculation_id"
+                        )
+                    )
+
+                    field = (
+                        reference.get(
+                            "field",
+                            "value"
+                        )
+                    )
+
+                    if not reference_id:
+
+                        raise ValueError(
+                            f"COMPARE '{calculation_id}' "
+                            f"{side} reference requires calculation_id"
+                        )
+
+                    if (
+                        reference_id
+                        not in available_result_ids
+                    ):
+
+                        raise ValueError(
+                            f"COMPARE '{calculation_id}' references "
+                            f"'{reference_id}' before it is available"
+                        )
+
+                    if (
+                        not isinstance(
+                            field,
+                            str
+                        )
+                        or
+                        not field.strip()
+                    ):
+
+                        raise ValueError(
+                            f"COMPARE '{calculation_id}' "
+                            f"{side} reference requires a valid field"
+                        )
+
+        # =================================================
+        # Dataset-producing calculations
+        # =================================================
+
+        elif (
+            operation
+            in SUPPORTED_DATASET_OPERATIONS
+        ):
+
+            if operation == "UNION":
+
+                sources = (
+                    calculation.get(
+                        "sources"
+                    )
+                )
+
+                if (
+                    not isinstance(
+                        sources,
+                        list
+                    )
+                    or
+                    len(sources) < 2
+                ):
+
+                    raise ValueError(
+                        f"UNION '{calculation_id}' requires "
+                        "at least two sources"
+                    )
+
+                for source in sources:
+
+                    if not isinstance(
+                        source,
+                        dict
+                    ):
+
+                        raise ValueError(
+                            f"UNION '{calculation_id}' "
+                            "sources must be objects"
+                        )
+
+                    if not source.get(
+                        "workbook_id"
+                    ):
+
+                        raise ValueError(
+                            f"UNION '{calculation_id}' source "
+                            "requires workbook_id"
+                        )
+
+                    if not source.get(
+                        "sheet"
+                    ):
+
+                        raise ValueError(
+                            f"UNION '{calculation_id}' source "
+                            "requires sheet"
+                        )
+
+        # =================================================
+        # Normal workbook or intermediate-dataset operation
+        # =================================================
+
+        else:
+
+            source = calculation.get(
+                "source"
+            )
+
+            if source is not None:
+
+                if not isinstance(
+                    source,
+                    dict
+                ):
+
+                    raise ValueError(
+                        f"Calculation '{calculation_id}' "
+                        "source must be an object"
+                    )
+
+                result_id = source.get(
+                    "result"
+                )
+
+                if not result_id:
+
+                    raise ValueError(
+                        f"Calculation '{calculation_id}' "
+                        "source requires result"
+                    )
+
+                if (
+                    result_id
+                    not in available_dataset_result_ids
+                ):
+
+                    raise ValueError(
+                        f"Calculation '{calculation_id}' references "
+                        f"dataset result '{result_id}' before it is available"
+                    )
+
         calculation_ids.add(
             calculation_id
         )
+
+        available_result_ids.add(
+            calculation_id
+        )
+
+        if (
+            operation
+            in SUPPORTED_DATASET_OPERATIONS
+        ):
+
+            available_dataset_result_ids.add(
+                calculation_id
+            )
+
+
+# =========================================================
+# UNION execution
+# =========================================================
+
+
+def execute_union(
+    dataset: dict,
+    calculation: dict
+):
+    """
+    Create a temporary local DataFrame by vertically combining
+    compatible workbook sheets.
+
+    No source workbook is mutated.
+    No row data is sent to the LLM.
+    """
+
+    sources = calculation.get(
+        "sources",
+        []
+    )
+
+    dataframes = []
+    expected_columns = None
+
+    for source in sources:
+
+        workbook_id = source.get(
+            "workbook_id"
+        )
+
+        sheet_name = source.get(
+            "sheet"
+        )
+
+        workbook = get_workbook(
+            dataset,
+            workbook_id
+        )
+
+        if not workbook:
+
+            raise ValueError(
+                "Unknown workbook_id in UNION: "
+                f"{workbook_id}"
+            )
+
+        sheets = workbook.get(
+            "sheets",
+            {}
+        )
+
+        if sheet_name not in sheets:
+
+            raise ValueError(
+                f"Sheet '{sheet_name}' does not exist in "
+                f"workbook '{workbook['filename']}'"
+            )
+
+        dataframe = (
+            sheets[
+                sheet_name
+            ]
+            .copy()
+        )
+
+        columns = [
+            str(column)
+            for column
+            in dataframe.columns
+        ]
+
+        if expected_columns is None:
+
+            expected_columns = columns
+
+        elif columns != expected_columns:
+
+            raise ValueError(
+                "UNION requires identical column names and order "
+                "across all source sheets"
+            )
+
+        dataframes.append(
+            dataframe
+        )
+
+    if not dataframes:
+
+        raise ValueError(
+            "UNION has no source data"
+        )
+
+    union_dataframe = pd.concat(
+        dataframes,
+        ignore_index=True,
+        copy=True
+    )
+
+    result = {
+        "id":
+            calculation[
+                "id"
+            ],
+
+        "operation":
+            "UNION",
+
+        "source_count":
+            len(
+                sources
+            ),
+
+        "row_count":
+            len(
+                union_dataframe
+            ),
+
+        "columns":
+            [
+                str(column)
+                for column
+                in union_dataframe.columns
+            ],
+    }
+
+    return (
+        union_dataframe,
+        result
+    )
 
 
 # =========================================================
@@ -265,23 +620,23 @@ async def ask_nexamind(
             detail="Dataset not found"
         )
 
-    sheets = dataset.get(
-        "sheets"
+    workbooks = get_workbooks(
+        dataset
     )
 
-    if not sheets:
+    if not workbooks:
 
         raise HTTPException(
             status_code=400,
-            detail="Dataset contains no Excel sheets"
+            detail="Dataset contains no Excel workbooks"
         )
 
     # -----------------------------------------------------
-    # 2. Build safe schema
+    # 2. Build privacy-safe multi-workbook schema catalog
     # -----------------------------------------------------
 
-    schema = build_excel_schema(
-        sheets
+    schema = build_dataset_schema(
+        dataset
     )
 
     print(
@@ -368,6 +723,10 @@ async def ask_nexamind(
 
     calculation_results = []
 
+    # Temporary DataFrames produced by calculations such as UNION.
+    # These stay only in local memory and are never returned to Gemini.
+    intermediate_datasets = {}
+
     for calculation in calculations:
 
         print(
@@ -382,24 +741,258 @@ async def ask_nexamind(
             "================================"
         )
 
-        try:
+        operation = str(
+            calculation.get(
+                "operation",
+                ""
+            )
+        ).upper()
 
-            result = execute_calculation(
-                sheets=sheets,
-                calculation=calculation
+        # =================================================
+        # A. Result-based scalar calculations
+        # =================================================
+
+        if (
+            operation
+            in SUPPORTED_RESULT_OPERATIONS
+        ):
+
+            try:
+
+                result = execute_result_calculation(
+                    calculation=calculation,
+                    calculation_results=calculation_results
+                )
+
+            except ValueError as error:
+
+                print(
+                    "Result calculation error:",
+                    error
+                )
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(error)
+                ) from error
+
+        # =================================================
+        # B. Dataset-producing calculations
+        # =================================================
+
+        elif (
+            operation
+            in SUPPORTED_DATASET_OPERATIONS
+        ):
+
+            try:
+
+                (
+                    intermediate_dataframe,
+                    result
+                ) = execute_union(
+                    dataset=dataset,
+                    calculation=calculation
+                )
+
+                intermediate_datasets[
+                    calculation[
+                        "id"
+                    ]
+                ] = intermediate_dataframe
+
+            except ValueError as error:
+
+                print(
+                    "Dataset calculation error:",
+                    error
+                )
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(error)
+                ) from error
+
+        # =================================================
+        # C. Analysis over an intermediate dataset
+        # =================================================
+
+        elif calculation.get(
+            "source"
+        ):
+
+            source = calculation[
+                "source"
+            ]
+
+            source_result_id = source.get(
+                "result"
             )
 
-        except ValueError as error:
-
-            print(
-                "Calculation error:",
-                error
+            dataframe = intermediate_datasets.get(
+                source_result_id
             )
 
-            raise HTTPException(
-                status_code=400,
-                detail=str(error)
-            ) from error
+            if dataframe is None:
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Unknown intermediate dataset result: "
+                        f"{source_result_id}"
+                    )
+                )
+
+            # Reuse the existing trusted calculation engine by
+            # exposing the temporary DataFrame as an internal sheet.
+            internal_sheet_name = "__nexamind_result__"
+
+            execution_calculation = dict(
+                calculation
+            )
+
+            execution_calculation[
+                "sheet"
+            ] = internal_sheet_name
+
+            execution_calculation.pop(
+                "source",
+                None
+            )
+
+            try:
+
+                result = execute_calculation(
+                    sheets={
+                        internal_sheet_name:
+                            dataframe
+                    },
+                    calculation=execution_calculation
+                )
+
+                result[
+                    "source"
+                ] = {
+                    "result":
+                        source_result_id
+                }
+
+                # Internal sheet name should not leak into the UI.
+                result.pop(
+                    "sheet",
+                    None
+                )
+
+            except ValueError as error:
+
+                print(
+                    "Intermediate calculation error:",
+                    error
+                )
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(error)
+                ) from error
+
+        # =================================================
+        # D. Direct workbook calculations
+        # =================================================
+
+        else:
+
+            workbook_id = calculation.get(
+                "workbook_id"
+            )
+
+            if (
+                not workbook_id
+                and
+                len(workbooks) == 1
+            ):
+
+                workbook_id = (
+                    workbooks[0][
+                        "workbook_id"
+                    ]
+                )
+
+                calculation[
+                    "workbook_id"
+                ] = workbook_id
+
+            if not workbook_id:
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Calculation must specify workbook_id "
+                        "when multiple workbooks are uploaded"
+                    )
+                )
+
+            workbook = get_workbook(
+                dataset,
+                workbook_id
+            )
+
+            if not workbook:
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Unknown workbook_id: "
+                        f"{workbook_id}"
+                    )
+                )
+
+            sheets = workbook.get(
+                "sheets",
+                {}
+            )
+
+            sheet_name = calculation.get(
+                "sheet"
+            )
+
+            if sheet_name not in sheets:
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Sheet '{sheet_name}' does not exist in "
+                        f"workbook '{workbook['filename']}'"
+                    )
+                )
+
+            try:
+
+                result = execute_calculation(
+                    sheets=sheets,
+                    calculation=calculation
+                )
+
+                result[
+                    "workbook_id"
+                ] = workbook_id
+
+                result[
+                    "workbook"
+                ] = workbook[
+                    "filename"
+                ]
+
+            except ValueError as error:
+
+                print(
+                    "Calculation error:",
+                    error
+                )
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(error)
+                ) from error
 
         calculation_results.append(
             result
