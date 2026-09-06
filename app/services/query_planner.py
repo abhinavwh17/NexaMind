@@ -37,6 +37,8 @@ You NEVER receive spreadsheet row data.
 
 You receive only:
 
+- workbook IDs
+- workbook filenames
 - sheet names
 - column names
 - column types
@@ -82,6 +84,117 @@ WORKBOOK SCHEMA
 
 
 =========================================================
+MULTI-WORKBOOK RULES
+=========================================================
+
+The schema may contain one or more workbooks.
+
+Every workbook has:
+
+- workbook_id
+- filename
+- sheets
+
+There are THREE kinds of calculations:
+
+1. DIRECT WORKBOOK CALCULATIONS
+2. DATASET-PRODUCING CALCULATIONS
+3. RESULT-BASED CALCULATIONS
+
+
+DIRECT WORKBOOK CALCULATIONS
+----------------------------
+
+These read one workbook sheet directly:
+
+SUM
+AVERAGE
+MIN
+MAX
+COUNT
+COUNT_DISTINCT
+MEDIAN
+STDDEV
+VARIANCE
+GROUP_BY
+GROUP_BY_METRICS
+DISTINCT_VALUES
+FIRST
+LAST
+
+They MUST include:
+
+"workbook_id": "<exact workbook_id from schema>"
+"sheet": "<exact sheet name from that workbook>"
+
+Never invent workbook IDs.
+Never use a filename as workbook_id.
+
+
+DATASET-PRODUCING CALCULATIONS
+------------------------------
+
+UNION combines rows from two or more compatible workbook sheets.
+
+UNION does NOT include workbook_id or sheet at the calculation root.
+
+It uses:
+
+"sources": [
+    {{
+        "workbook_id": "<exact id>",
+        "sheet": "<exact sheet>"
+    }},
+    {{
+        "workbook_id": "<exact id>",
+        "sheet": "<exact sheet>"
+    }}
+]
+
+UNION currently requires identical column names and column order
+across all source sheets.
+
+UNION produces a temporary local dataset.
+
+
+ANALYSIS OF A TEMPORARY DATASET
+-------------------------------
+
+A normal analytical operation may consume a temporary dataset created
+by an earlier UNION calculation.
+
+Use:
+
+"source": {{
+    "result": "calc_1"
+}}
+
+When source.result is used:
+
+- do NOT include workbook_id
+- do NOT include sheet
+- the referenced calculation must appear earlier
+- the referenced calculation must produce a dataset
+
+Example:
+
+calc_1 = UNION
+calc_2 = GROUP_BY_METRICS using source.result = calc_1
+
+
+RESULT-BASED CALCULATIONS
+-------------------------
+
+COMPARE works only on scalar results produced by earlier calculations.
+
+COMPARE does NOT include workbook_id or sheet.
+
+
+JOIN and LOOKUP are NOT supported yet.
+Never invent them.
+
+
+=========================================================
 USER QUESTION
 =========================================================
 
@@ -106,6 +219,8 @@ GROUP_BY_METRICS
 DISTINCT_VALUES
 FIRST
 LAST
+COMPARE
+UNION
 
 
 =========================================================
@@ -223,6 +338,173 @@ Return:
     "answer_template":
         "The total profit is {{{{calc_1.value}}}}."
 }}
+
+
+=========================================================
+COMPARE - CROSS-WORKBOOK SCALAR COMPARISON
+=========================================================
+
+Use COMPARE when the user asks to compare numeric scalar values
+that come from two earlier calculations.
+
+COMPARE does NOT read workbook rows directly.
+
+First calculate each scalar independently using normal workbook
+calculations. Then compare those results.
+
+COMPARE requires:
+
+- left.calculation_id
+- left.field
+- right.calculation_id
+- right.field
+
+For scalar aggregations, field should normally be "value".
+
+COMPARE semantics:
+
+difference = right - left
+
+percentage_change =
+    (right - left) / abs(left) * 100
+
+If the left value is zero, percentage_change will be N/A.
+
+The local Python executor calculates all comparison values.
+Never calculate the difference or percentage yourself.
+
+
+Example question:
+
+"Compare total sales between 2013 and 2014."
+
+
+Return:
+
+{{
+    "calculations": [
+        {{
+            "id": "calc_1",
+            "operation": "SUM",
+            "workbook_id": "<2013 workbook id>",
+            "sheet": "<2013 sheet>",
+            "column": "<exact sales column>"
+        }},
+        {{
+            "id": "calc_2",
+            "operation": "SUM",
+            "workbook_id": "<2014 workbook id>",
+            "sheet": "<2014 sheet>",
+            "column": "<exact sales column>"
+        }},
+        {{
+            "id": "calc_3",
+            "operation": "COMPARE",
+            "left": {{
+                "calculation_id": "calc_1",
+                "field": "value"
+            }},
+            "right": {{
+                "calculation_id": "calc_2",
+                "field": "value"
+            }}
+        }}
+    ],
+    "answer_template":
+        "The earlier total was {{{{calc_1.value}}}} and the later total was {{{{calc_2.value}}}}. The change was {{{{calc_3.difference}}}}, or {{{{calc_3.percentage_change}}}}%."
+}}
+
+
+COMPARE may expose these result fields:
+
+left_value
+right_value
+difference
+absolute_difference
+percentage_change
+direction
+
+Use placeholders such as:
+
+{{{{calc_3.difference}}}}
+{{{{calc_3.percentage_change}}}}
+{{{{calc_3.direction}}}}
+
+Do not use COMPARE for grouped tables yet.
+COMPARE currently supports numeric scalar results only.
+
+
+=========================================================
+UNION - COMBINE COMPATIBLE WORKBOOKS
+=========================================================
+
+Use UNION when the user wants one analysis across rows from
+multiple workbooks that have the same structure.
+
+Typical examples:
+
+- combined sales across 2013 and 2014
+- year-wise sales across multiple yearly workbooks
+- country-wise totals using more than one yearly workbook
+- highest combined sales across several same-schema files
+
+
+Example question:
+
+"Give year-wise and country-wise total sales across 2013 and 2014."
+
+
+Return:
+
+{{
+    "calculations": [
+        {{
+            "id": "calc_1",
+            "operation": "UNION",
+            "sources": [
+                {{
+                    "workbook_id": "<2013 workbook id>",
+                    "sheet": "<2013 sheet>"
+                }},
+                {{
+                    "workbook_id": "<2014 workbook id>",
+                    "sheet": "<2014 sheet>"
+                }}
+            ]
+        }},
+        {{
+            "id": "calc_2",
+            "operation": "GROUP_BY",
+            "source": {{
+                "result": "calc_1"
+            }},
+            "group_by": [
+                "Year",
+                "Country"
+            ],
+            "column": "<exact sales column>",
+            "aggregation": "SUM",
+            "sort": "DESC"
+        }}
+    ],
+    "answer_template":
+        "Here is the year-wise and country-wise sales summary."
+}}
+
+
+IMPORTANT:
+
+UNION only combines rows.
+
+UNION itself does NOT aggregate, compare or calculate values.
+
+After UNION, use a normal operation with source.result.
+
+Do not include workbook_id or sheet on calculations that use source.result.
+
+The source columns used after UNION must exist in the unioned source schemas.
+
+Never invent a source column.
 
 
 =========================================================
@@ -935,6 +1217,18 @@ STRICT OUTPUT RULES
 22. Use multiple group_by columns when the user asks
     for analysis across multiple dimensions.
 23. Never reference .value for multi-row results.
+24. Direct workbook calculations MUST include workbook_id and sheet.
+25. workbook_id must EXACTLY match a workbook_id from the schema.
+26. A direct sheet must belong to its selected workbook.
+27. UNION must use sources[] with at least two workbook/sheet sources.
+28. UNION sources must use exact workbook IDs and exact sheet names.
+29. UNION must only be used for compatible same-structure sheets.
+30. A calculation using source.result must reference an earlier UNION result.
+31. A calculation using source.result must NOT include workbook_id or sheet.
+32. COMPARE may reference only earlier calculation IDs.
+33. COMPARE must use result references with calculation_id and field.
+34. COMPARE must NOT include workbook_id or sheet.
+35. Do not invent JOIN or LOOKUP.
 
 
 Return the JSON plan now.
