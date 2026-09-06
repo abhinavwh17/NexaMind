@@ -1,0 +1,210 @@
+name: Build NexaMind Desktop
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+
+jobs:
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build NexaMind executable
+        run: |
+          pyinstaller --clean NexaMind.spec
+
+      - name: Verify executable
+        shell: powershell
+        run: |
+          if (!(Test-Path "dist\NexaMind.exe")) {
+            Write-Error "NexaMind.exe was not generated"
+            exit 1
+          }
+
+          Write-Host "NexaMind.exe generated successfully"
+
+      - name: Create Windows package
+        shell: powershell
+        run: |
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path package
+
+          Copy-Item `
+            dist\NexaMind.exe `
+            package\NexaMind.exe
+
+          Compress-Archive `
+            -Path package\* `
+            -DestinationPath NexaMind-Windows.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexaMind-Windows
+          path: NexaMind-Windows.zip
+          if-no-files-found: error
+
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build NexaMind macOS app
+        run: |
+          pyinstaller --clean NexaMind.spec
+
+      - name: Verify macOS build
+        run: |
+          if [ ! -f "dist/NexaMind" ]; then
+            echo "NexaMind binary was not generated"
+            exit 1
+          fi
+
+          echo "NexaMind binary generated successfully"
+
+      - name: Create NexaMind.app bundle
+        run: |
+          mkdir -p NexaMind.app/Contents/MacOS
+          mkdir -p NexaMind.app/Contents/Resources
+
+          cp dist/NexaMind NexaMind.app/Contents/MacOS/NexaMind
+
+          chmod +x NexaMind.app/Contents/MacOS/NexaMind
+
+          cat > NexaMind.app/Contents/Info.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>NexaMind</string>
+
+              <key>CFBundleDisplayName</key>
+              <string>NexaMind</string>
+
+              <key>CFBundleExecutable</key>
+              <string>NexaMind</string>
+
+              <key>CFBundleIdentifier</key>
+              <string>com.nexamind.desktop</string>
+
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+
+              <key>CFBundleShortVersionString</key>
+              <string>1.0.0</string>
+
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+
+              <key>LSMinimumSystemVersion</key>
+              <string>11.0</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Create DMG staging directory
+        run: |
+          mkdir -p dmg
+
+          cp -R NexaMind.app dmg/NexaMind.app
+
+          ln -s /Applications dmg/Applications
+
+      - name: Create NexaMind DMG
+        run: |
+          hdiutil create \
+            -volname "NexaMind" \
+            -srcfolder dmg \
+            -ov \
+            -format UDZO \
+            NexaMind-macOS.dmg
+
+      - name: Verify DMG
+        run: |
+          if [ ! -f "NexaMind-macOS.dmg" ]; then
+            echo "NexaMind-macOS.dmg was not generated"
+            exit 1
+          fi
+
+          ls -lh NexaMind-macOS.dmg
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexaMind-macOS
+          path: NexaMind-macOS.dmg
+          if-no-files-found: error

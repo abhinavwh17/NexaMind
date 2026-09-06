@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import "./App.css";
 import GeminiSetup from "./components/GeminiSetup";
 
@@ -301,6 +304,91 @@ const formatResultValue = (value) => {
 
 
 // --------------------------------------------------
+// Export table to Excel
+// --------------------------------------------------
+
+const exportTableToExcel = (calculation) => {
+  if (
+    !Array.isArray(calculation.rows) ||
+    calculation.rows.length === 0
+  ) {
+    return;
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet(
+    calculation.rows
+  );
+
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "NexaMind Analysis"
+  );
+
+  XLSX.writeFile(
+    workbook,
+    `nexamind-${calculation.id}.xlsx`
+  );
+};
+
+
+// --------------------------------------------------
+// Export table to PDF
+// --------------------------------------------------
+
+const exportTableToPdf = (calculation) => {
+  if (
+    !Array.isArray(calculation.rows) ||
+    calculation.rows.length === 0
+  ) {
+    return;
+  }
+
+  const document = new jsPDF({
+    orientation: "landscape",
+  });
+
+  const columns = Object.keys(
+    calculation.rows[0]
+  );
+
+  const body = calculation.rows.map(
+    (row) =>
+      columns.map(
+        (column) =>
+          formatResultValue(
+            row[column]
+          )
+      )
+  );
+
+  document.text(
+    "NexaMind Analysis",
+    14,
+    15
+  );
+
+  autoTable(document, {
+    head: [columns],
+    body,
+    startY: 22,
+    styles: {
+      fontSize: 8,
+    },
+    headStyles: {
+      fontStyle: "bold",
+    },
+  });
+
+  document.save(
+    `nexamind-${calculation.id}.pdf`
+  );
+};
+
+
+// --------------------------------------------------
 // Render calculation table
 // --------------------------------------------------
 
@@ -322,15 +410,43 @@ const renderCalculationTable = (calculation) => {
       key={`table-${calculation.id}`}
     >
       <div className="result-table-header">
-        <div>
-          Detailed breakdown
+        <div className="result-table-title-section">
+          <div>
+            Detailed breakdown
+          </div>
+
+          <div className="result-table-count">
+            {calculation.rows.length}{" "}
+            {calculation.rows.length === 1
+              ? "row"
+              : "rows"}
+          </div>
         </div>
 
-        <div className="result-table-count">
-          {calculation.rows.length}{" "}
-          {calculation.rows.length === 1
-            ? "row"
-            : "rows"}
+        <div className="result-export-actions">
+          <button
+            type="button"
+            className="result-export-button"
+            onClick={() =>
+              exportTableToExcel(
+                calculation
+              )
+            }
+          >
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="result-export-button"
+            onClick={() =>
+              exportTableToPdf(
+                calculation
+              )
+            }
+          >
+            Export PDF
+          </button>
         </div>
       </div>
 
@@ -385,7 +501,12 @@ const renderAnswerResult = (answer) => {
     calculations.filter(
       (calculation) =>
         Array.isArray(calculation.rows) &&
-        calculation.rows.length > 1
+        calculation.rows.length > 0 &&
+        (
+          calculation.operation ===
+            "GROUP_BY_METRICS" ||
+          calculation.rows.length > 1
+        )
     );
 
   const hasAnswer =
@@ -598,14 +719,14 @@ const renderAnswerResult = (answer) => {
               </p>
 
               <div className="supported-files">
-                XLSX &nbsp;•&nbsp; XLS &nbsp;•&nbsp; PDF
+                XLSX &nbsp;•&nbsp; XLS
               </div>
 
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".xlsx,.xls,.pdf"
+                accept=".xlsx,.xls"
                 onChange={handleFileSelect}
                 hidden
               />
