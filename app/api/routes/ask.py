@@ -24,6 +24,11 @@ from app.services.calculation_service import (
 from app.services.query_planner import (
     QueryPlanner,
 )
+from app.services.conversation_service import (
+    get_conversation,
+    get_conversation_by_dataset,
+    save_exchange,
+)
 
 
 router = APIRouter(
@@ -36,6 +41,7 @@ class AskRequest(BaseModel):
 
     dataset_id: str
     question: str
+    conversation_id: str | None = None
 
 
 # =========================================================
@@ -1063,7 +1069,62 @@ async def ask_nexamind(
     )
 
     # -----------------------------------------------------
-    # 4. Validate plan
+    # 4. Handle a valid no-calculation / out-of-scope plan
+    # -----------------------------------------------------
+
+    calculations = plan.get(
+        "calculations"
+    )
+
+    answer_template = plan.get(
+        "answer_template"
+    )
+
+    if (
+        isinstance(calculations, list)
+        and len(calculations) == 0
+    ):
+        if (
+            not isinstance(answer_template, str)
+            or not answer_template.strip()
+        ):
+            answer_template = (
+                "This question cannot be answered using the data "
+                "available in the uploaded workbooks."
+            )
+
+        response = {
+            "status": "out_of_scope",
+            "question": request.question,
+            "answer": answer_template.strip(),
+            "calculations": [],
+        }
+
+        print(
+            "\n========== OUT OF SCOPE =========="
+        )
+        print(response)
+        print(
+            "=================================="
+        )
+
+        conversation = (
+            get_conversation(request.conversation_id)
+            if request.conversation_id
+            else get_conversation_by_dataset(request.dataset_id)
+        )
+
+        if conversation:
+            save_exchange(
+                conversation_id=conversation["id"],
+                question=request.question,
+                response_payload=response,
+            )
+
+        return response
+
+    # -----------------------------------------------------
+    # 5. Validate executable plan
     # -----------------------------------------------------
 
     try:
@@ -1079,20 +1140,16 @@ async def ask_nexamind(
             detail=str(error)
         ) from error
 
-    calculations = (
-        plan[
-            "calculations"
-        ]
-    )
+    calculations = plan[
+        "calculations"
+    ]
 
-    answer_template = (
-        plan[
-            "answer_template"
-        ]
-    )
+    answer_template = plan[
+        "answer_template"
+    ]
 
     # -----------------------------------------------------
-    # 5. Execute locally
+    # 6. Execute locally
     # -----------------------------------------------------
 
     calculation_results = []
@@ -1433,6 +1490,9 @@ async def ask_nexamind(
     # -----------------------------------------------------
 
     response = {
+        "status":
+            "success",
+
         "question":
             request.question,
 
@@ -1454,5 +1514,18 @@ async def ask_nexamind(
     print(
         "===================================="
     )
+
+    conversation = (
+        get_conversation(request.conversation_id)
+        if request.conversation_id
+        else get_conversation_by_dataset(request.dataset_id)
+    )
+
+    if conversation:
+        save_exchange(
+            conversation_id=conversation["id"],
+            question=request.question,
+            response_payload=response,
+        )
 
     return response

@@ -303,6 +303,25 @@ PERCENTAGE
 
 
 =========================================================
+OUT-OF-SCOPE / UNANSWERABLE QUESTIONS
+=========================================================
+
+If the user's question cannot be answered from the uploaded workbook
+schema, do NOT invent a calculation and do NOT answer from general
+knowledge.
+
+Return a valid no-calculation plan:
+
+{{
+    "calculations": [],
+    "answer_template": "This question cannot be answered using the data available in the uploaded workbooks."
+}}
+
+An empty calculations array is valid ONLY for this no-calculation case.
+The answer_template must still contain a helpful user-facing message.
+
+
+=========================================================
 RESPONSE FORMAT
 =========================================================
 
@@ -1435,11 +1454,10 @@ Return the JSON plan now.
                 "AI query plan must contain calculations[]"
             )
 
-        if not calculations:
-
-            raise ValueError(
-                "AI query plan contains no calculations"
-            )
+        # An empty calculations list is a valid plan when the question
+        # cannot be answered from the uploaded workbook schema. The API
+        # route handles that as a normal out-of-scope response rather than
+        # treating it as an internal server error.
 
         # -------------------------------------------------
         # Validate answer template

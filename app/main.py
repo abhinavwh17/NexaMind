@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes.files import router as files_router
 from app.api.routes.ask import router as ask_router
 from app.api.routes.settings import router as settings_router
+from app.api.routes.conversations import router as conversations_router
+from app.services.conversation_service import initialize_database
 
 
 app = FastAPI(
@@ -32,6 +34,9 @@ app.add_middleware(
 app.include_router(files_router)
 app.include_router(ask_router)
 app.include_router(settings_router)
+app.include_router(conversations_router)
+
+initialize_database()
 
 
 @app.get("/health")
