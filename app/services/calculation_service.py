@@ -26,6 +26,16 @@ SUPPORTED_OPERATIONS = {
 
 
 # =========================================================
+# Supported operations that work on previous calculation
+# results rather than directly on workbook rows.
+# =========================================================
+
+SUPPORTED_RESULT_OPERATIONS = {
+    "COMPARE",
+}
+
+
+# =========================================================
 # Operations that must never modify source data
 # =========================================================
 
@@ -2307,6 +2317,311 @@ def execute_calculation(
         )
 
         return result
+
+    raise ValueError(
+        f"Operation not implemented: {operation}"
+    )
+
+
+# =========================================================
+# Previous-result helpers
+# =========================================================
+
+
+def _get_result_by_id(
+    calculation_results: list[dict],
+    calculation_id: str
+):
+    for result in calculation_results:
+
+        if result.get(
+            "id"
+        ) == calculation_id:
+
+            return result
+
+    raise ValueError(
+        "Unknown calculation result reference: "
+        f"{calculation_id}"
+    )
+
+
+def _resolve_result_reference(
+    reference: dict,
+    calculation_results: list[dict]
+):
+    if not isinstance(
+        reference,
+        dict
+    ):
+
+        raise ValueError(
+            "Result reference must be an object"
+        )
+
+    calculation_id = (
+        reference.get(
+            "calculation_id"
+        )
+    )
+
+    field = (
+        reference.get(
+            "field",
+            "value"
+        )
+    )
+
+    if not calculation_id:
+
+        raise ValueError(
+            "Result reference requires calculation_id"
+        )
+
+    if not isinstance(
+        field,
+        str
+    ) or not field.strip():
+
+        raise ValueError(
+            "Result reference requires a valid field"
+        )
+
+    result = _get_result_by_id(
+        calculation_results,
+        calculation_id
+    )
+
+    if field not in result:
+
+        raise ValueError(
+            "Calculation result "
+            f"'{calculation_id}' has no field '{field}'"
+        )
+
+    value = result[
+        field
+    ]
+
+    if value is None:
+
+        raise ValueError(
+            "Cannot compare an empty result value: "
+            f"{calculation_id}.{field}"
+        )
+
+    return value
+
+
+def _to_comparable_number(
+    value,
+    reference_name: str
+):
+    try:
+
+        numeric_value = float(
+            value
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ) as error:
+
+        raise ValueError(
+            "COMPARE requires numeric scalar results. "
+            f"'{reference_name}' is not numeric."
+        ) from error
+
+    if math.isnan(
+        numeric_value
+    ) or math.isinf(
+        numeric_value
+    ):
+
+        raise ValueError(
+            "COMPARE requires finite numeric scalar results. "
+            f"'{reference_name}' is invalid."
+        )
+
+    return numeric_value
+
+
+# =========================================================
+# Result-based executor
+# =========================================================
+
+
+def execute_result_calculation(
+    calculation: dict,
+    calculation_results: list[dict]
+):
+    """
+    Execute an operation whose inputs are previous calculation results.
+
+    This is intentionally separate from execute_calculation(), which works
+    against workbook DataFrames. Keeping the two execution paths separate
+    makes the trust boundary explicit:
+
+        workbook operation -> DataFrame
+        result operation   -> already calculated scalar results
+    """
+
+    if not isinstance(
+        calculation,
+        dict
+    ):
+
+        raise ValueError(
+            "Calculation must be an object"
+        )
+
+    calculation_id = (
+        calculation.get(
+            "id"
+        )
+    )
+
+    if not calculation_id:
+
+        raise ValueError(
+            "Calculation requires an id"
+        )
+
+    operation = str(
+        calculation.get(
+            "operation",
+            ""
+        )
+    ).upper()
+
+    if (
+        operation
+        not in SUPPORTED_RESULT_OPERATIONS
+    ):
+
+        raise ValueError(
+            "Unsupported result operation: "
+            f"{operation}"
+        )
+
+    # =====================================================
+    # COMPARE
+    # =====================================================
+
+    if operation == "COMPARE":
+
+        left_reference = (
+            calculation.get(
+                "left"
+            )
+        )
+
+        right_reference = (
+            calculation.get(
+                "right"
+            )
+        )
+
+        left_value = _resolve_result_reference(
+            left_reference,
+            calculation_results
+        )
+
+        right_value = _resolve_result_reference(
+            right_reference,
+            calculation_results
+        )
+
+        left_number = _to_comparable_number(
+            left_value,
+            "left"
+        )
+
+        right_number = _to_comparable_number(
+            right_value,
+            "right"
+        )
+
+        difference = (
+            right_number
+            -
+            left_number
+        )
+
+        absolute_difference = abs(
+            difference
+        )
+
+        if left_number == 0:
+
+            percentage_change = None
+
+        else:
+
+            percentage_change = (
+                difference
+                /
+                abs(
+                    left_number
+                )
+                *
+                100
+            )
+
+        if difference > 0:
+
+            direction = "increase"
+
+        elif difference < 0:
+
+            direction = "decrease"
+
+        else:
+
+            direction = "no change"
+
+        return {
+            "id":
+                calculation_id,
+
+            "operation":
+                operation,
+
+            "left":
+                left_reference,
+
+            "right":
+                right_reference,
+
+            "left_value":
+                normalize_value(
+                    left_number
+                ),
+
+            "right_value":
+                normalize_value(
+                    right_number
+                ),
+
+            "difference":
+                normalize_value(
+                    difference
+                ),
+
+            "absolute_difference":
+                normalize_value(
+                    absolute_difference
+                ),
+
+            "percentage_change":
+                normalize_value(
+                    percentage_change
+                ),
+
+            "direction":
+                direction,
+        }
 
     raise ValueError(
         f"Operation not implemented: {operation}"
